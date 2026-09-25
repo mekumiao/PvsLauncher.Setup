@@ -70,6 +70,8 @@ pwsh ./build.ps1 -Configuration Debug
 | `-SkipClean`      | `switch`             | 关        | 跳过清理 `publish/app` 与旧的 `*.exe`，做增量构建。                                        |
 | `-SkipVueInstall` | `switch`             | 关        | 跳过 `pnpm install`（`node_modules` 已是最新时可选）。                                     |
 | `-SkipVue`        | `switch`             | 关        | 跳过后端前端构建与组装，复用上一次的 `dist`。                                              |
+| `-SkipApi`        | `switch`             | 关        | 跳过 Web 与 sitecli 的发布，复用上一次的 `Dependencies/api`。                              |
+| `-SkipAppLauncher`| `switch`             | 关        | 跳过 AppLauncher 的发布，复用上一次的程序集。                                              |
 | `-SkipInstaller`  | `switch`             | 关        | 只构建并组装，不调用 Inno Setup 打包；此时不会读写 `version.txt`。                         |
 
 ### 常见用法
@@ -86,6 +88,12 @@ pwsh ./build.ps1 -Version 2.0.0
 
 # 只组装可运行的绿色目录，不打安装包
 pwsh ./build.ps1 -SkipInstaller
+
+# 复用上次的 api 与 AppLauncher，只重新构建前端并打包
+pwsh ./build.ps1 -SkipApi -SkipAppLauncher -SkipClean
+
+# 复用上次的构建，只重新打安装包
+pwsh ./build.ps1 -SkipVue -SkipApi -SkipAppLauncher -SkipClean
 ```
 
 ## 版本管理

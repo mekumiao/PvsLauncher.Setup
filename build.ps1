@@ -22,6 +22,12 @@
 .PARAMETER SkipVue
     跳过后端前端构建与组装（复用上一次的 dist）。
 
+.PARAMETER SkipApi
+    跳过 Web 与 sitecli 的发布（复用上一次的 Dependencies/api）。
+
+.PARAMETER SkipAppLauncher
+    跳过 AppLauncher 的发布（复用上一次的程序集）。
+
 .PARAMETER SkipInstaller
     只构建并组装，不调用 Inno Setup 打包。
 
@@ -40,6 +46,8 @@ param(
     [switch]$SkipClean,
     [switch]$SkipVueInstall,
     [switch]$SkipVue,
+    [switch]$SkipApi,
+    [switch]$SkipAppLauncher,
     [switch]$SkipInstaller
 )
 
@@ -282,30 +290,32 @@ else {
 # ----------------------------------------------------------------------------
 $apiOutput = Join-Path $AppDependencies 'api'
 
-Invoke-Step -Name '发布 ProductVisualStudio.Web' -Action {
-    Invoke-External -FilePath 'dotnet' -Arguments @(
-        'publish', $WebProject,
-        '-c', $Configuration,
-        '-f', 'net10.0',
-        '--os', 'win', '-a', 'x64',
-        '--self-contained', 'false',
-        '-p:PublishSingleFile=false',
-        '-p:PublishReadyToRun=false',
-        '-o', $apiOutput
-    )
-}
+if (-not $SkipApi) {
+    Invoke-Step -Name '发布 ProductVisualStudio.Web' -Action {
+        Invoke-External -FilePath 'dotnet' -Arguments @(
+            'publish', $WebProject,
+            '-c', $Configuration,
+            '-f', 'net10.0',
+            '--os', 'win', '-a', 'x64',
+            '--self-contained', 'false',
+            '-p:PublishSingleFile=false',
+            '-p:PublishReadyToRun=false',
+            '-o', $apiOutput
+        )
+    }
 
-Invoke-Step -Name '发布 ProductVisualStudio.SiteCollectors.Client (sitecli)' -Action {
-    Invoke-External -FilePath 'dotnet' -Arguments @(
-        'publish', $SiteCliProject,
-        '-c', $Configuration,
-        '-f', 'net10.0',
-        '--os', 'win', '-a', 'x64',
-        '--self-contained', 'false',
-        '-p:PublishSingleFile=false',
-        '-p:PublishReadyToRun=false',
-        '-o', $apiOutput
-    )
+    Invoke-Step -Name '发布 ProductVisualStudio.SiteCollectors.Client (sitecli)' -Action {
+        Invoke-External -FilePath 'dotnet' -Arguments @(
+            'publish', $SiteCliProject,
+            '-c', $Configuration,
+            '-f', 'net10.0',
+            '--os', 'win', '-a', 'x64',
+            '--self-contained', 'false',
+            '-p:PublishSingleFile=false',
+            '-p:PublishReadyToRun=false',
+            '-o', $apiOutput
+        )
+    }
 }
 
 # ----------------------------------------------------------------------------
@@ -334,13 +344,15 @@ if (-not $SkipVue) {
 # ----------------------------------------------------------------------------
 # 3. AppLauncher
 # ----------------------------------------------------------------------------
-Invoke-Step -Name '发布 AppLauncher' -Action {
-    Invoke-External -FilePath 'dotnet' -Arguments @(
-        'publish', $LauncherProject,
-        '-c', $Configuration,
-        '-r', 'win-x64',
-        '-o', $AppRoot
-    )
+if (-not $SkipAppLauncher) {
+    Invoke-Step -Name '发布 AppLauncher' -Action {
+        Invoke-External -FilePath 'dotnet' -Arguments @(
+            'publish', $LauncherProject,
+            '-c', $Configuration,
+            '-r', 'win-x64',
+            '-o', $AppRoot
+        )
+    }
 }
 
 # ----------------------------------------------------------------------------
