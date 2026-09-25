@@ -10,6 +10,9 @@
 .PARAMETER Configuration
     发布配置，默认 Release。
 
+.PARAMETER Version
+    指定本次安装包版本号（x.y.z），优先于 version.txt 自增；打包成功后回写 version.txt。
+
 .PARAMETER SkipClean
     跳过程序集与安装包的清理，做增量构建。
 
@@ -31,6 +34,8 @@
 param(
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
+
+    [string]$Version,
 
     [switch]$SkipClean,
     [switch]$SkipVueInstall,
@@ -60,6 +65,7 @@ $SiteCliProject  = Join-Path $PvsRoot 'src/ProductVisualStudio.SiteCollectors.Cl
 $LauncherProject = Join-Path $LauncherRoot 'src/AppLauncher/AppLauncher.csproj'
 
 $IsccScript      = Join-Path $SetupRoot 'setup.iss'
+$VersionFile     = Join-Path $SetupRoot 'version.txt'
 
 # ----------------------------------------------------------------------------
 # 通用函数
@@ -173,15 +179,30 @@ function Copy-RuntimeDirectory {
     }
 }
 
-function Get-AppVersion {
-    $props = Join-Path $LauncherRoot 'Directory.Build.props'
-    Assert-Path -Path $props -Description 'AppLauncher Directory.Build.props'
-
-    $match = [regex]::Match((Get-Content -LiteralPath $props -Raw), '<Version>\s*([^<\s]+)\s*</Version>')
-    if ($match.Success) {
-        return $match.Groups[1].Value
+function Read-CurrentVersion {
+    if (-not (Test-Path -LiteralPath $VersionFile)) {
+        throw "缺少版本文件：$VersionFile"
     }
-    return '0.0.0'
+
+    $raw = (Get-Content -LiteralPath $VersionFile -Raw).Trim()
+    if ($raw -notmatch '^\d+\.\d+\.\d+$') {
+        throw "版本文件格式非法（应为 x.y.z）：$VersionFile -> '$raw'"
+    }
+    return $raw
+}
+
+function Get-NextVersion {
+    param([Parameter(Mandatory)][string]$Current)
+
+    $parts = $Current.Split('.')
+    $parts[2] = [string]([int]$parts[2] + 1)
+    return ($parts -join '.')
+}
+
+function Save-Version {
+    param([Parameter(Mandatory)][string]$Value)
+
+    [System.IO.File]::WriteAllText($VersionFile, "$Value`n", (New-Object System.Text.UTF8Encoding($false)))
 }
 
 function Resolve-Iscc {
@@ -223,8 +244,24 @@ else {
     Write-Host '    dotnet / pnpm 就绪（已跳过安装包）' -ForegroundColor Green
 }
 
-$AppVersion = Get-AppVersion
-Write-Host "    AppLauncher 版本: $AppVersion"
+$AppVersion = $null
+if (-not $SkipInstaller) {
+    if ($Version) {
+        if ($Version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "版本号格式非法（应为 x.y.z）：$Version"
+        }
+        $AppVersion = $Version
+        Write-Host "    打包版本: $AppVersion（由 -Version 指定）"
+    }
+    else {
+        $currentVersion = Read-CurrentVersion
+        $AppVersion = Get-NextVersion -Current $currentVersion
+        Write-Host "    打包版本: $AppVersion（version.txt: $currentVersion 自增 +1）"
+    }
+}
+else {
+    Write-Host '    已跳过安装包，不读取/更新 version.txt'
+}
 
 # ----------------------------------------------------------------------------
 # 清理
@@ -324,6 +361,8 @@ Invoke-Step -Name '组装运行时依赖 (nginx / xray / frp)' -Action {
 if (-not $SkipInstaller) {
     Invoke-Step -Name '生成安装包 (Inno Setup)' -Action {
         Invoke-External -FilePath $iscc -Arguments @("/DMyAppVersion=$AppVersion", 'setup.iss') -WorkingDirectory $SetupRoot
+        Save-Version -Value $AppVersion
+        Write-Host "    已写入 version.txt: $AppVersion"
     }
 
     Write-Section '完成'
