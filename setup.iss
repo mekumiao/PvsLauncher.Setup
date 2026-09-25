@@ -29,7 +29,7 @@ OutputDir=publish
 OutputBaseFilename={#MyAppName}-Setup-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
-WizardStyle=modern
+WizardStyle=windows11 dynamic
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupLogging=yes
 
