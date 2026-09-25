@@ -40,6 +40,17 @@ AppLauncher.Setup/
 - [pnpm](https://pnpm.io/)（`pnpm build` 需要 Node.js）
 - [Inno Setup 6.3+ / 7.x](https://jrsoftware.org/isinfo.php)（仅打包时需要；会从 `Program Files` 自动查找 `ISCC.exe`）
 
+## 安装行为（面向最终用户）
+
+- **免管理员**：安装程序以当前用户权限运行，默认装到 `%LocalAppData%\Programs\AppLauncher`；开始菜单与卸载信息也写入当前用户。
+- **自动联网补齐前置**：安装时检测并按需从 `aka.ms` 下载安装以下组件（缺失才装，已装则跳过）：
+  - [.NET 10 Desktop Runtime](https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-x64.exe)（AppLauncher 需要）
+  - [.NET 10 ASP.NET Core Runtime](https://aka.ms/dotnet/10.0/aspnetcore-runtime-win-x64.exe)（Web api 需要）
+  - [Windows App Runtime 2.5.1 (x64)](https://aka.ms/windowsappsdk/2.5/2.5.1/windowsappruntimeinstall-x64.exe)（未打包 WinUI 应用需要）
+  - [Visual C++ 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)（Windows App SDK 要求）
+  - 其中 .NET 与 VC++ 需要管理员，会**单独弹一次 UAC**；Windows App Runtime 按当前用户安装。
+- **不含调试符号**：安装包排除全部 `*.pdb`。
+
 ## 快速开始
 
 ```pwsh
@@ -105,7 +116,8 @@ pwsh ./build.ps1 -Version 2.0.0  # -> AppLauncher-Setup-2.0.0.exe，version.txt 
 5. **前端**：`pnpm install --frozen-lockfile`（可跳过）→ `pnpm build` → 复制 `dist` 到 `publish/app/Dependencies/dist`。
 6. **发布 AppLauncher**：`dotnet publish -c Release -r win-x64` 输出到 `publish/app`。
 7. **组装运行时依赖**：从 `../Dependencies` 复制 `nginx` / `xray` / `frp`，并排除运行期生成的文件（见下）。
-8. **打包**：调用 `ISCC.exe /DMyAppVersion=<版本> setup.iss`，成功后写回 `version.txt`。
+8. **清理调试符号**：递归删除 `publish/app` 下所有 `*.pdb`。
+9. **打包**：调用 `ISCC.exe /DMyAppVersion=<版本> setup.iss`，成功后写回 `version.txt`。
 
 ### 组装规则
 
@@ -122,7 +134,7 @@ pwsh ./build.ps1 -Version 2.0.0  # -> AppLauncher-Setup-2.0.0.exe，version.txt 
 - 程序集（可直接运行或用于排查）：`publish/app/`
 - 安装包：`publish/AppLauncher-Setup-<版本>.exe`
 
-安装包由 `setup.iss` 定义：产品名 `AppLauncher`、管理员权限、x64、中文/英文双语界面、开始菜单快捷方式，桌面快捷方式为可选项（安装向导中的任务），安装完成后可选择立即启动。
+安装包由 `setup.iss` 定义：产品名 `AppLauncher`、**免管理员**（装到当前用户目录）、x64、中文/英文双语界面、开始菜单快捷方式，桌面快捷方式为可选项（安装向导中的任务），安装完成后可选择立即启动。打包时排除所有 `*.pdb`，前置组件在安装时联网按需下载安装（见「安装行为」）。
 
 ## 单独使用 Inno Setup
 
@@ -139,4 +151,4 @@ pwsh ./build.ps1 -Version 2.0.0  # -> AppLauncher-Setup-2.0.0.exe，version.txt 
 - **找不到 ISCC.exe**：安装 Inno Setup，或使用 `-SkipInstaller` 只构建程序集。
 - **`version.txt` 报错**：确认文件存在且内容形如 `1.1.1`（三段数字）。
 - **前端构建失败**：先确认 `pnpm` 可用；必要时去掉 `-SkipVueInstall` 重新执行 `pnpm install`。
-- **只想验证组装结果**：使用 `-SkipInstaller`，然后直接运行 `publish/app/AppLauncher.exe`（需管理员权限，涉及 nginx/xray 端口与网络）。
+- **只想验证组装结果**：使用 `-SkipInstaller`，然后直接运行 `publish/app/AppLauncher.exe`（运行期无需管理员；nginx/xray 仅监听本机端口，首次可能触发 Windows 防火墙提示）。

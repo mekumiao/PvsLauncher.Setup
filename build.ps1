@@ -356,7 +356,15 @@ Invoke-Step -Name '组装运行时依赖 (nginx / xray / frp)' -Action {
 }
 
 # ----------------------------------------------------------------------------
-# 5. 打包安装包
+# 5. 清理调试符号
+# ----------------------------------------------------------------------------
+Invoke-Step -Name '清理调试符号 (*.pdb)' -Action {
+    Get-ChildItem -LiteralPath $AppRoot -Recurse -Filter '*.pdb' -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force
+}
+
+# ----------------------------------------------------------------------------
+# 6. 打包安装包
 # ----------------------------------------------------------------------------
 if (-not $SkipInstaller) {
     Invoke-Step -Name '生成安装包 (Inno Setup)' -Action {
