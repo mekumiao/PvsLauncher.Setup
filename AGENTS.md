@@ -56,7 +56,7 @@ pwsh ./build.ps1 -SkipInstaller
 - **ISCC 定位**：先查 PATH，再在 `$env:ProgramFiles` / `${env:ProgramFiles(x86)}` 下找 `Inno Setup*\ISCC.exe`。装的是 Inno Setup 7。
 - `setup.iss` 用 `#ifndef MyAppVersion` 兜底，可脱离 `build.ps1` 手动编译，但 `publish/app` 必须已存在，否则 `[Files]` 源匹配失败。
 - **安装模式**：`setup.iss` 用 `PrivilegesRequired=lowest`，`{autopf}` 即 `%LocalAppData%\Programs`，**免管理员装用户目录**。不要在管理员模式下写用户目录（Inno 明确不推荐）。
-- **前置组件**：`[Code] PrepareToInstall` 联网从 aka.ms 检测并安装 .NET 10 Desktop/ASP.NET Core 运行时、Windows App Runtime 2.5.1、VC++ x64。.NET 与 VC++ 用 `ShellExec('runas', …)` 单独触发一次 UAC，Windows App Runtime 按当前用户静默安装。**升级依赖版本时要同步改 setup.iss 顶部的 URL 常量。**
+- **前置组件**：`setup.iss` 不含 `[Code]`，安装包不联网安装依赖；.NET 10 Desktop/ASP.NET Core 运行时、Windows App Runtime 2.5.1、VC++ x64 需用户预先装好（通常一次即可）。不要重新引入联网下载逻辑。
 - **调试符号**：`setup.iss` 的 `[Files]` 用 `Excludes: "*.pdb"` 排除全部 pdb；`build.ps1` 打包前也会清理 `publish/app` 下 `*.pdb`。
 - **上游已知问题**（不在本仓库范围，勿在打包脚本里“修复”）：`AppLauncher/.../launcher.yaml` 的 nginx 模板路径写作 `./Configs/conf/nginx.conf.template`，但实际文件是 `Configs/nginx.conf.template`（无 `conf/` 子目录），安装后首启可能找不到模板。发现时应指出，而不是默默改 `build.ps1`。
 - `publish/` 已被 `.gitignore` 忽略；`.gitignore` 只额外忽略 `*.exe`。

@@ -43,12 +43,11 @@ AppLauncher.Setup/
 ## 安装行为（面向最终用户）
 
 - **免管理员**：安装程序以当前用户权限运行，默认装到 `%LocalAppData%\Programs\AppLauncher`；开始菜单与卸载信息也写入当前用户。
-- **自动联网补齐前置**：安装时检测并按需从 `aka.ms` 下载安装以下组件（缺失才装，已装则跳过）：
+- **前置组件需自行预先安装**：安装程序不联网下载依赖，运行前需确保已装好以下组件（通常安装一次即可）：
   - [.NET 10 Desktop Runtime](https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-x64.exe)（AppLauncher 需要）
   - [.NET 10 ASP.NET Core Runtime](https://aka.ms/dotnet/10.0/aspnetcore-runtime-win-x64.exe)（Web api 需要）
   - [Windows App Runtime 2.5.1 (x64)](https://aka.ms/windowsappsdk/2.5/2.5.1/windowsappruntimeinstall-x64.exe)（未打包 WinUI 应用需要）
   - [Visual C++ 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)（Windows App SDK 要求）
-  - 其中 .NET 与 VC++ 需要管理员，会**单独弹一次 UAC**；Windows App Runtime 按当前用户安装。
 - **不含调试符号**：安装包排除全部 `*.pdb`。
 
 ## 快速开始
@@ -142,7 +141,7 @@ pwsh ./build.ps1 -Version 2.0.0  # -> AppLauncher-Setup-2.0.0.exe，version.txt 
 - 程序集（可直接运行或用于排查）：`publish/app/`
 - 安装包：`publish/AppLauncher-Setup-<版本>.exe`
 
-安装包由 `setup.iss` 定义：产品名 `AppLauncher`、**免管理员**（装到当前用户目录）、x64、中文/英文双语界面、开始菜单快捷方式，桌面快捷方式为可选项（安装向导中的任务），安装完成后可选择立即启动。打包时排除所有 `*.pdb`，前置组件在安装时联网按需下载安装（见「安装行为」）。
+安装包由 `setup.iss` 定义：产品名 `AppLauncher`、**免管理员**（装到当前用户目录）、x64、中文/英文双语界面、开始菜单快捷方式，桌面快捷方式为可选项（安装向导中的任务），安装完成后可选择立即启动。打包时排除所有 `*.pdb`；前置组件需用户预先安装（见「安装行为」）。
 
 ## 单独使用 Inno Setup
 
