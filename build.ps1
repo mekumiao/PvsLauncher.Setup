@@ -353,6 +353,26 @@ Invoke-Step -Name '组装运行时依赖 (nginx / xray / frp)' -Action {
         -ExcludeFiles @('nginx.conf', 'nginx.conf.bak')
     Copy-RuntimeDirectory -Name 'xray' -ExcludeFiles @('config_client.json')
     Copy-RuntimeDirectory -Name 'frp' -ExcludeFiles @('frpc.toml')
+
+    # nginx 首次启动需要这些运行期目录存在；复制时按约定排除了 logs/ 与 temp/，
+    # 这里显式重建，并放入 keep 占位文件，使其随 [Files] 打入安装包并被安装。
+    $nginxRoot = Join-Path $AppDependencies 'nginx'
+    $nginxRuntimeDirectories = @(
+        'logs',
+        'temp/client_body_temp',
+        'temp/proxy_temp',
+        'temp/fastcgi_temp',
+        'temp/scgi_temp',
+        'temp/uwsgi_temp'
+    )
+    foreach ($relative in $nginxRuntimeDirectories) {
+        $directory = Join-Path $nginxRoot $relative
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+        $placeholder = Join-Path $directory 'keep'
+        if (-not (Test-Path -LiteralPath $placeholder)) {
+            New-Item -ItemType File -Path $placeholder -Force | Out-Null
+        }
+    }
 }
 
 # ----------------------------------------------------------------------------

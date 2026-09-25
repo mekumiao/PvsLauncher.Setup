@@ -125,7 +125,7 @@ pwsh ./build.ps1 -Version 2.0.0  # -> AppLauncher-Setup-2.0.0.exe，version.txt 
 
 复制运行时依赖时会排除以下**运行期生成物**，交由 AppLauncher 首次启动时的模板步骤重新生成：
 
-- `nginx/`：排除 `logs/`、`temp/` 目录与 `conf/nginx.conf`、`conf/nginx.conf.bak`
+- `nginx/`：排除 `logs/`、`temp/` 目录与 `conf/nginx.conf`、`conf/nginx.conf.bak`；随后重建 `logs/` 及 `temp/` 下的 `client_body_temp`、`proxy_temp`、`fastcgi_temp`、`scgi_temp`、`uwsgi_temp`，并各放入 `keep` 占位文件，确保这些空目录能进入安装包并在安装后存在
 - `xray/`：排除 `config_client.json`
 - `frp/`：排除 `frpc.toml`
 

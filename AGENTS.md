@@ -52,7 +52,7 @@ pwsh ./build.ps1 -SkipInstaller
 
 - **版本号**：`version.txt` 最后一段 patch 自增（`1.1.1 → 1.1.2`）；传 `-Version` 时以传入值优先。**只有 Inno Setup 编译成功后**才写回 `version.txt`，失败不留缺口。`-SkipInstaller` 时完全不读写 `version.txt`。
 - **组装布局**必须匹配 `AppLauncher/src/AppLauncher/launcher.yaml`：exe 与 `launcher.yaml`、`Configs/` 同级，`Dependencies/` 在其下；nginx 的 `webRoot: ../dist` 相对 `Dependencies/nginx` 指向 `Dependencies/dist`。改动目录结构前先核对 `launcher.yaml`。
-- **运行时排除**：复制 `nginx` 时排除 `logs/`、`temp/`、`conf/nginx.conf`、`conf/nginx.conf.bak`；`xray` 排除 `config_client.json`；`frp` 排除 `frpc.toml`。这些都是首次启动由模板生成的运行期文件，不要打包进去。
+- **运行时排除**：复制 `nginx` 时排除 `logs/`、`temp/`、`conf/nginx.conf`、`conf/nginx.conf.bak`；`xray` 排除 `config_client.json`；`frp` 排除 `frpc.toml`。这些都是首次启动由模板生成的运行期文件，不要打包进去。nginx 被排除的 `logs/` 与 `temp/` 下 5 个默认子目录会在复制后显式重建并写入 `keep` 占位文件（`[Files]` 不打包空目录），保证安装后目录存在。
 - **ISCC 定位**：先查 PATH，再在 `$env:ProgramFiles` / `${env:ProgramFiles(x86)}` 下找 `Inno Setup*\ISCC.exe`。装的是 Inno Setup 7。
 - `setup.iss` 用 `#ifndef MyAppVersion` 兜底，可脱离 `build.ps1` 手动编译，但 `publish/app` 必须已存在，否则 `[Files]` 源匹配失败。
 - **安装模式**：`setup.iss` 用 `PrivilegesRequired=lowest`，`{autopf}` 即 `%LocalAppData%\Programs`，**免管理员装用户目录**。不要在管理员模式下写用户目录（Inno 明确不推荐）。
