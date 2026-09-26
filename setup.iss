@@ -1,4 +1,4 @@
-﻿; AppLauncher 安装包脚本 (Inno Setup 6.3+ / 7.x)
+﻿; AppLauncher 安装包脚本 (Inno Setup 7.x)
 ; 由 build.ps1 调用，并通过 /DMyAppVersion=<版本> 注入版本号。
 ;
 ; 安装模式：免管理员，默认装到当前用户目录 (%LocalAppData%\Programs\AppLauncher)。
@@ -39,9 +39,13 @@ SetupIconFile=assets\AppLauncher.ico
 UninstallDisplayIcon={app}\AppLauncher.ico
 SetupLogging=yes
 
-; 卸载时询问是否清理用户数据（%LOCALAPPDATA%\AppLauncher）。
+; 卸载时的数据清理选项（选择模式窗体）。
 [CustomMessages]
-chinesesimplified.UninstallRemoveUserData=是否删除 AppLauncher 的用户配置与缓存目录？%n%n选择「否」将保留这些数据（如需彻底清除，可手动删除该目录）。%n%n请先退出 AppLauncher 再继续。
+chinesesimplified.UninstallOptionsTitle=卸载选项
+chinesesimplified.UninstallOptionsText=请选择要一并删除的数据，未勾选项将保留。%n%n请先退出 AppLauncher 再继续。
+chinesesimplified.UninstallRemoveUserData=删除用户配置与缓存（%LOCALAPPDATA%\AppLauncher）
+chinesesimplified.UninstallOptionsConfirm=开始卸载
+chinesesimplified.UninstallOptionsCancel=取消
 
 [Languages]
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
@@ -50,8 +54,8 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; 排除所有调试符号，安装包与安装目录都不包含 *.pdb。
-Source: "publish\app\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
+; 排除调试符号与运行期状态文件，安装包与安装目录都不包含 *.pdb / launcher.state.yaml。
+Source: "publish\app\*"; DestDir: "{app}"; Excludes: "*.pdb,launcher.state.yaml"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; 应用图标随包安装，供快捷方式与卸载项引用。
 Source: "assets\AppLauncher.ico"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -63,16 +67,110 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
-; 卸载收尾阶段询问是否删除用户数据目录；静默卸载不询问、保留数据。
+; 卸载前弹出「选择模式」窗体，由用户勾选是否删除用户数据；静默卸载不询问、保留用户数据。
+; 整个 Dependencies 目录无论是否静默都一律删除。
 [Code]
+var
+  RemoveUserData: Boolean;
+  UninstallCancelled: Boolean;
+
+{ 显示卸载选项窗体；用户取消时置 UninstallCancelled 以中止卸载。 }
+procedure ShowUninstallOptions;
+var
+  Form: TSetupForm;
+  Info: TNewStaticText;
+  UserDataCheck: TNewCheckBox;
+  ConfirmButton, CancelButton: TNewButton;
+  W: Integer;
+begin
+  Form := CreateCustomForm(ScaleX(400), ScaleY(170), False, False);
+  try
+    Form.Caption := ExpandConstant('{cm:UninstallOptionsTitle}');
+
+    Info := TNewStaticText.Create(Form);
+    Info.Parent := Form;
+    Info.Left := ScaleX(16);
+    Info.Top := ScaleY(12);
+    Info.Width := Form.ClientWidth - ScaleX(32);
+    Info.Height := ScaleY(66);
+    Info.AutoSize := False;
+    Info.WordWrap := True;
+    Info.Caption := ExpandConstant('{cm:UninstallOptionsText}');
+
+    UserDataCheck := TNewCheckBox.Create(Form);
+    UserDataCheck.Parent := Form;
+    UserDataCheck.Left := ScaleX(16);
+    UserDataCheck.Top := Info.Top + Info.Height + ScaleY(8);
+    UserDataCheck.Width := Form.ClientWidth - ScaleX(32);
+    UserDataCheck.Height := ScaleY(20);
+    UserDataCheck.Caption := ExpandConstant('{cm:UninstallRemoveUserData}');
+    UserDataCheck.Checked := False;
+
+    ConfirmButton := TNewButton.Create(Form);
+    ConfirmButton.Parent := Form;
+    ConfirmButton.Caption := ExpandConstant('{cm:UninstallOptionsConfirm}');
+    ConfirmButton.ModalResult := mrOk;
+    ConfirmButton.Default := True;
+
+    CancelButton := TNewButton.Create(Form);
+    CancelButton.Parent := Form;
+    CancelButton.Caption := ExpandConstant('{cm:UninstallOptionsCancel}');
+    CancelButton.ModalResult := mrCancel;
+    CancelButton.Cancel := True;
+
+    W := Form.CalculateButtonWidth([ConfirmButton.Caption, CancelButton.Caption]);
+    ConfirmButton.Width := W;
+    CancelButton.Width := W;
+    ConfirmButton.Height := ScaleY(25);
+    CancelButton.Height := ScaleY(25);
+    CancelButton.Left := Form.ClientWidth - ScaleX(12) - CancelButton.Width;
+    ConfirmButton.Left := CancelButton.Left - ScaleX(8) - ConfirmButton.Width;
+    ConfirmButton.Top := Form.ClientHeight - ScaleY(12) - ConfirmButton.Height;
+    CancelButton.Top := ConfirmButton.Top;
+
+    Form.ActiveControl := ConfirmButton;
+
+    if Form.ShowModal() = mrOk then
+      RemoveUserData := UserDataCheck.Checked
+    else
+      UninstallCancelled := True;
+  finally
+    Form.Free();
+  end;
+end;
+
+function InitializeUninstall: Boolean;
+begin
+  RemoveUserData := False;
+  UninstallCancelled := False;
+
+  { 静默卸载不弹窗，保留用户数据。 }
+  if UninstallSilent then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  ShowUninstallOptions;
+  Result := not UninstallCancelled;
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  DependenciesDir: String;
 begin
   if CurUninstallStep = usPostUninstall then
   begin
+    { 无论是否静默，整个 Dependencies 目录都删除。 }
+    DependenciesDir := ExpandConstant('{app}\Dependencies');
+    if DirExists(DependenciesDir) then
+      DelTree(DependenciesDir, True, True, True);
+
+    { 静默卸载不弹窗，保留用户数据。 }
     if UninstallSilent then
       Exit;
-    if MsgBox(ExpandConstant('{cm:UninstallRemoveUserData}'),
-              mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+
+    if RemoveUserData then
       DelTree(ExpandConstant('{localappdata}\AppLauncher'), True, True, True);
   end;
 end;

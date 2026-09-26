@@ -388,10 +388,13 @@ Invoke-Step -Name '组装运行时依赖 (nginx / xray / frp)' -Action {
 }
 
 # ----------------------------------------------------------------------------
-# 5. 清理调试符号
+# 5. 清理调试符号与运行状态文件
 # ----------------------------------------------------------------------------
-Invoke-Step -Name '清理调试符号 (*.pdb)' -Action {
+Invoke-Step -Name '清理调试符号与运行状态文件' -Action {
     Get-ChildItem -LiteralPath $AppRoot -Recurse -Filter '*.pdb' -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force
+    # launcher.state.yaml 为运行期生成的状态文件，不应随安装包分发。
+    Get-ChildItem -LiteralPath $AppRoot -Recurse -Filter 'launcher.state.yaml' -File -ErrorAction SilentlyContinue |
         Remove-Item -Force
 }
 
