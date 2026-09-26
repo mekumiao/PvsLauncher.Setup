@@ -49,6 +49,7 @@ AppLauncher.Setup/
   - [Windows App Runtime 2.5.1 (x64)](https://aka.ms/windowsappsdk/2.5/2.5.1/windowsappruntimeinstall-x64.exe)（未打包 WinUI 应用需要）
   - [Visual C++ 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)（Windows App SDK 要求）
 - **不含调试符号**：安装包排除全部 `*.pdb`。
+- **卸载时可选清理用户数据**：卸载收尾会弹窗询问是否删除 `%LOCALAPPDATA%\AppLauncher`（应用运行态数据，如 `launcher.state.yaml`），默认保留；静默卸载（`/SILENT`、`/VERYSILENT`）不询问、直接保留。请先退出 AppLauncher 再卸载。
 
 ## 快速开始
 
