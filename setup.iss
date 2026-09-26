@@ -67,8 +67,11 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
+; 卸载时删除整个安装目录（含 Dependencies / Configs 等运行期残留）；用户数据在 [Code] 中按需删除。
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"
+
 ; 卸载前弹出「选择模式」窗体，由用户勾选是否删除用户数据；静默卸载不询问、保留用户数据。
-; 整个 Dependencies 目录无论是否静默都一律删除。
 [Code]
 var
   RemoveUserData: Boolean;
@@ -156,17 +159,10 @@ begin
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-var
-  DependenciesDir: String;
 begin
   if CurUninstallStep = usPostUninstall then
   begin
-    { 无论是否静默，整个 Dependencies 目录都删除。 }
-    DependenciesDir := ExpandConstant('{app}\Dependencies');
-    if DirExists(DependenciesDir) then
-      DelTree(DependenciesDir, True, True, True);
-
-    { 静默卸载不弹窗，保留用户数据。 }
+    { 安装目录已由 [UninstallDelete] 整体删除；静默卸载不弹窗、保留用户数据。 }
     if UninstallSilent then
       Exit;
 

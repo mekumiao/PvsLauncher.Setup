@@ -49,7 +49,7 @@ AppLauncher.Setup/
   - [Windows App Runtime 2.5.1 (x64)](https://aka.ms/windowsappsdk/2.5/2.5.1/windowsappruntimeinstall-x64.exe)（未打包 WinUI 应用需要）
   - [Visual C++ 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)（Windows App SDK 要求）
 - **不含调试符号与运行状态文件**：安装包排除全部 `*.pdb` 与 `launcher.state.yaml`。
-- **卸载时可选择清理用户数据**：卸载前弹出「选择模式」窗体，由用户勾选是否删除用户配置与缓存目录 `%LOCALAPPDATA%\AppLauncher`（应用运行态数据，如 Release 下的 `launcher.state.yaml`），**默认不勾选（保留）**；安装目录下的整个 `Dependencies`（nginx/xray/frp/api/dist）**无论是否静默都一律删除**。静默卸载（`/SILENT`、`/VERYSILENT`）不弹窗、保留用户数据。请先退出 AppLauncher 再卸载。
+- **卸载时清理**：卸载前弹出「选择模式」窗体，由用户勾选是否删除用户配置与缓存目录 `%LOCALAPPDATA%\AppLauncher`（应用运行态数据，如 Release 下的 `launcher.state.yaml`），**默认不勾选（保留）**。整个安装目录 `{app}`（含 `Dependencies`、`Configs` 等全部残留）**无论是否静默都由 `[UninstallDelete]` 一律删除**。静默卸载（`/SILENT`、`/VERYSILENT`）不弹窗、保留用户数据。请先退出 AppLauncher 再卸载。
 
 ## 快速开始
 
