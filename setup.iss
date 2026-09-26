@@ -42,11 +42,9 @@ SetupLogging=yes
 ; 卸载时询问是否清理用户数据（%LOCALAPPDATA%\AppLauncher）。
 [CustomMessages]
 chinesesimplified.UninstallRemoveUserData=是否删除 AppLauncher 的用户配置与缓存目录？%n%n选择「否」将保留这些数据（如需彻底清除，可手动删除该目录）。%n%n请先退出 AppLauncher 再继续。
-english.UninstallRemoveUserData=Delete AppLauncher user settings and cache?%n%nChoose No to keep your data (you can delete the folder manually later).%n%nPlease close AppLauncher first.
 
 [Languages]
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
-Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
