@@ -1,11 +1,11 @@
 ﻿#requires -Version 7.0
 <#
 .SYNOPSIS
-    构建 AppLauncher 完整安装包。
+    构建 PvsLauncher 完整安装包。
 
 .DESCRIPTION
-    依次发布 Web、sitecli、前端 dist 与 AppLauncher，按 launcher.yaml 期望的目录结构组装到
-    AppLauncher.Setup/publish/app，最后调用 Inno Setup 生成安装包到 AppLauncher.Setup/publish。
+    依次发布 Web、sitecli、前端 dist 与 PvsLauncher，按 launcher.yaml 期望的目录结构组装到
+    PvsLauncher.Setup/publish/app，最后调用 Inno Setup 生成安装包到 PvsLauncher.Setup/publish。
 
 .PARAMETER Configuration
     发布配置，默认 Release。
@@ -30,7 +30,7 @@
     跳过 Web 与 sitecli 的发布（复用上一次的 Dependencies/api）。
 
 .PARAMETER SkipAppLauncher
-    跳过 AppLauncher 的发布（复用上一次的程序集）。
+    跳过 PvsLauncher 的发布（复用上一次的程序集）。
 
 .PARAMETER SkipInstaller
     只构建并组装，不调用 Inno Setup 打包。
@@ -73,12 +73,12 @@ $AppDependencies = Join-Path $AppRoot 'Dependencies'
 
 $PvsRoot = Join-Path $SourceRoot 'ProductVisualStudio'
 $VueRoot = Join-Path $SourceRoot 'product-visual-studio-vue'
-$LauncherRoot = Join-Path $SourceRoot 'AppLauncher'
+$LauncherRoot = Join-Path $SourceRoot 'PvsLauncher'
 $RuntimeDepsRoot = Join-Path $SourceRoot 'Dependencies'
 
 $WebProject = Join-Path $PvsRoot 'src/ProductVisualStudio.Web/ProductVisualStudio.Web.csproj'
 $SiteCliProject = Join-Path $PvsRoot 'src/ProductVisualStudio.SiteCollectors.Client/ProductVisualStudio.SiteCollectors.Client.csproj'
-$LauncherProject = Join-Path $LauncherRoot 'src/AppLauncher/AppLauncher.csproj'
+$LauncherProject = Join-Path $LauncherRoot 'src/PvsLauncher/PvsLauncher.csproj'
 
 $IsccScript = Join-Path $SetupRoot 'setup.iss'
 $VersionFile = Join-Path $SetupRoot 'version.txt'
@@ -180,7 +180,7 @@ function Copy-RuntimeDirectory {
         Remove-Item -LiteralPath $destination -Recurse -Force
     }
 
-    # 排除运行期生成的配置与日志，交由 AppLauncher 的模板步骤在首次启动时生成。
+    # 排除运行期生成的配置与日志，交由 PvsLauncher 的模板步骤在首次启动时生成。
     $robocopyArgs = @($source, $destination, '/E', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/R:1', '/W:1')
     foreach ($directory in $ExcludeDirectories) {
         $robocopyArgs += @('/XD', (Join-Path $source $directory))
@@ -271,7 +271,7 @@ Assert-Command -Name 'dotnet' -Hint '请安装 .NET 10 SDK。'
 Assert-Command -Name 'pnpm' -Hint '请安装 pnpm。'
 Assert-Path -Path $WebProject -Description 'Web 项目'
 Assert-Path -Path $SiteCliProject -Description 'sitecli 项目'
-Assert-Path -Path $LauncherProject -Description 'AppLauncher 项目'
+Assert-Path -Path $LauncherProject -Description 'PvsLauncher 项目'
 Assert-Path -Path $VueRoot -Description '前端项目目录'
 Assert-Path -Path $IsccScript -Description 'setup.iss'
 if (-not $SkipInstaller) {
@@ -377,10 +377,10 @@ if (-not $SkipVue) {
 }
 
 # ----------------------------------------------------------------------------
-# 3. AppLauncher
+# 3. PvsLauncher
 # ----------------------------------------------------------------------------
 if (-not $SkipAppLauncher) {
-    Invoke-Step -Name '发布 AppLauncher' -Action {
+    Invoke-Step -Name '发布 PvsLauncher' -Action {
         Invoke-External -FilePath 'dotnet' -Arguments @(
             'publish', $LauncherProject,
             '-c', $Configuration,
@@ -444,7 +444,7 @@ if (-not $SkipInstaller) {
     }
 
     Write-Section '完成'
-    Write-Host "安装包: $PublishRoot\AppLauncher-Setup-$AppVersion.exe" -ForegroundColor Green
+    Write-Host "安装包: $PublishRoot\PvsLauncher-Setup-$AppVersion.exe" -ForegroundColor Green
     Write-Host "程序集: $AppRoot"
 }
 else {
