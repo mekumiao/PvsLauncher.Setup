@@ -24,7 +24,7 @@
     跳过 pnpm install（node_modules 已存在且最新时可选）。
 
 .PARAMETER SkipVue
-    跳过后端前端构建与组装（复用上一次的 dist）。
+    跳过前端构建与组装（复用上一次的 dist）。
 
 .PARAMETER SkipApi
     跳过 Web 与 sitecli 的发布（复用上一次的 Dependencies/api）。

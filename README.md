@@ -69,7 +69,7 @@ pwsh ./build.ps1 -Configuration Debug
 | `-Version`         | `string`             | 空        | 版本控制：不传用 `version.txt`；传 `+N` / `+x.y.z` 递增；传 `x.y.z` 直接指定。详细规则见下文。 |
 | `-SkipClean`       | `switch`             | 关        | 跳过清理 `publish/app` 与旧的 `*.exe`，做增量构建。                                            |
 | `-SkipVueInstall`  | `switch`             | 关        | 跳过 `pnpm install`（`node_modules` 已是最新时可选）。                                         |
-| `-SkipVue`         | `switch`             | 关        | 跳过后端前端构建与组装，复用上一次的 `dist`。                                                  |
+| `-SkipVue`         | `switch`             | 关        | 跳过前端构建与组装，复用上一次的 `dist`。                                                            |
 | `-SkipApi`         | `switch`             | 关        | 跳过 Web 与 sitecli 的发布，复用上一次的 `Dependencies/api`。                                  |
 | `-SkipAppLauncher` | `switch`             | 关        | 跳过 PvsLauncher 的发布，复用上一次的程序集。                                                  |
 | `-SkipInstaller`   | `switch`             | 关        | 只构建并组装，不调用 Inno Setup 打包；此时不会读写 `version.txt`。                             |
