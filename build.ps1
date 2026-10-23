@@ -11,7 +11,11 @@
     发布配置，默认 Release。
 
 .PARAMETER Version
-    指定本次安装包版本号（x.y.z），优先于 version.txt 自增；打包成功后回写 version.txt。
+    指定本次安装包版本号，支持三种形式：
+    - 不传：直接使用 version.txt 中的版本号（不递增）。
+    - +N 或 +x.y.z：在当前 version.txt 版本上递增。+N 只加 patch 段；+x.y.z 逐段相加且不进位。
+    - x.y.z：直接使用该版本号。
+    打包成功后回写 version.txt（即使版本号未变也会刷新文件时间戳）。
 
 .PARAMETER SkipClean
     跳过程序集与安装包的清理，做增量构建。
@@ -35,6 +39,10 @@
     pwsh ./build.ps1
 .EXAMPLE
     pwsh ./build.ps1 -SkipVue -SkipClean
+.EXAMPLE
+    pwsh ./build.ps1 -Version +1
+.EXAMPLE
+    pwsh ./build.ps1 -Version +0.1.0
 #>
 [CmdletBinding()]
 param(
@@ -57,23 +65,23 @@ Set-StrictMode -Version Latest
 # ----------------------------------------------------------------------------
 # 路径
 # ----------------------------------------------------------------------------
-$SetupRoot       = $PSScriptRoot
-$SourceRoot      = Split-Path -Path $SetupRoot -Parent
-$PublishRoot     = Join-Path $SetupRoot 'publish'
-$AppRoot         = Join-Path $PublishRoot 'app'
+$SetupRoot = $PSScriptRoot
+$SourceRoot = Split-Path -Path $SetupRoot -Parent
+$PublishRoot = Join-Path $SetupRoot 'publish'
+$AppRoot = Join-Path $PublishRoot 'app'
 $AppDependencies = Join-Path $AppRoot 'Dependencies'
 
-$PvsRoot         = Join-Path $SourceRoot 'ProductVisualStudio'
-$VueRoot         = Join-Path $SourceRoot 'product-visual-studio-vue'
-$LauncherRoot    = Join-Path $SourceRoot 'AppLauncher'
+$PvsRoot = Join-Path $SourceRoot 'ProductVisualStudio'
+$VueRoot = Join-Path $SourceRoot 'product-visual-studio-vue'
+$LauncherRoot = Join-Path $SourceRoot 'AppLauncher'
 $RuntimeDepsRoot = Join-Path $SourceRoot 'Dependencies'
 
-$WebProject      = Join-Path $PvsRoot 'src/ProductVisualStudio.Web/ProductVisualStudio.Web.csproj'
-$SiteCliProject  = Join-Path $PvsRoot 'src/ProductVisualStudio.SiteCollectors.Client/ProductVisualStudio.SiteCollectors.Client.csproj'
+$WebProject = Join-Path $PvsRoot 'src/ProductVisualStudio.Web/ProductVisualStudio.Web.csproj'
+$SiteCliProject = Join-Path $PvsRoot 'src/ProductVisualStudio.SiteCollectors.Client/ProductVisualStudio.SiteCollectors.Client.csproj'
 $LauncherProject = Join-Path $LauncherRoot 'src/AppLauncher/AppLauncher.csproj'
 
-$IsccScript      = Join-Path $SetupRoot 'setup.iss'
-$VersionFile     = Join-Path $SetupRoot 'version.txt'
+$IsccScript = Join-Path $SetupRoot 'setup.iss'
+$VersionFile = Join-Path $SetupRoot 'version.txt'
 
 # ----------------------------------------------------------------------------
 # 通用函数
@@ -199,12 +207,35 @@ function Read-CurrentVersion {
     return $raw
 }
 
-function Get-NextVersion {
-    param([Parameter(Mandatory)][string]$Current)
+function Get-IncrementedVersion {
+    param(
+        [Parameter(Mandatory)][string]$Current,
+        [Parameter(Mandatory)][string]$Delta
+    )
+
+    if ($Delta -match '^\+(\d+)$') {
+        $majorDelta = 0
+        $minorDelta = 0
+        $patchDelta = [int]$Matches[1]
+    }
+    elseif ($Delta -match '^\+(\d+)\.(\d+)\.(\d+)$') {
+        $majorDelta = [int]$Matches[1]
+        $minorDelta = [int]$Matches[2]
+        $patchDelta = [int]$Matches[3]
+    }
+    else {
+        throw "版本增量格式非法（应为 +N 或 +x.y.z）：$Delta"
+    }
+
+    if (($majorDelta + $minorDelta + $patchDelta) -eq 0) {
+        throw "版本增量必须大于 0：$Delta"
+    }
 
     $parts = $Current.Split('.')
-    $parts[2] = [string]([int]$parts[2] + 1)
-    return ($parts -join '.')
+    $major = [int]$parts[0] + $majorDelta
+    $minor = [int]$parts[1] + $minorDelta
+    $patch = [int]$parts[2] + $patchDelta
+    return "$major.$minor.$patch"
 }
 
 function Save-Version {
@@ -222,8 +253,8 @@ function Resolve-Iscc {
     $searchRoots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ }
     foreach ($root in $searchRoots) {
         $candidate = Get-ChildItem -Path (Join-Path $root 'Inno Setup*\ISCC.exe') -ErrorAction SilentlyContinue |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1
+        Sort-Object FullName -Descending |
+        Select-Object -First 1
         if ($candidate) {
             return $candidate.FullName
         }
@@ -254,17 +285,21 @@ else {
 
 $AppVersion = $null
 if (-not $SkipInstaller) {
-    if ($Version) {
-        if ($Version -notmatch '^\d+\.\d+\.\d+$') {
-            throw "版本号格式非法（应为 x.y.z）：$Version"
-        }
+    if (-not $Version) {
+        $AppVersion = Read-CurrentVersion
+        Write-Host "    打包版本: $AppVersion（使用 version.txt 当前值，不递增）"
+    }
+    elseif ($Version -match '^\+') {
+        $currentVersion = Read-CurrentVersion
+        $AppVersion = Get-IncrementedVersion -Current $currentVersion -Delta $Version
+        Write-Host "    打包版本: $AppVersion（version.txt: $currentVersion 递增 $Version）"
+    }
+    elseif ($Version -match '^\d+\.\d+\.\d+$') {
         $AppVersion = $Version
         Write-Host "    打包版本: $AppVersion（由 -Version 指定）"
     }
     else {
-        $currentVersion = Read-CurrentVersion
-        $AppVersion = Get-NextVersion -Current $currentVersion
-        Write-Host "    打包版本: $AppVersion（version.txt: $currentVersion 自增 +1）"
+        throw "版本号格式非法（应为 x.y.z、+N 或 +x.y.z）：$Version"
     }
 }
 else {
@@ -278,7 +313,7 @@ if (-not $SkipClean) {
     Invoke-Step -Name '清理旧的发布输出' -Action {
         Reset-Directory -Path $AppRoot
         Get-ChildItem -LiteralPath $PublishRoot -Filter '*.exe' -File -ErrorAction SilentlyContinue |
-            Remove-Item -Force
+        Remove-Item -Force
     }
 }
 else {
@@ -392,10 +427,10 @@ Invoke-Step -Name '组装运行时依赖 (nginx / xray / frp)' -Action {
 # ----------------------------------------------------------------------------
 Invoke-Step -Name '清理调试符号与运行状态文件' -Action {
     Get-ChildItem -LiteralPath $AppRoot -Recurse -Filter '*.pdb' -File -ErrorAction SilentlyContinue |
-        Remove-Item -Force
+    Remove-Item -Force
     # launcher.state.yaml 为运行期生成的状态文件，不应随安装包分发。
     Get-ChildItem -LiteralPath $AppRoot -Recurse -Filter 'launcher.state.yaml' -File -ErrorAction SilentlyContinue |
-        Remove-Item -Force
+    Remove-Item -Force
 }
 
 # ----------------------------------------------------------------------------

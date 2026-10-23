@@ -8,7 +8,7 @@ AppLauncher 一键构建与打包项目：把 **ProductVisualStudio.Web**、**si
 AppLauncher.Setup/
 ├─ build.ps1      # 构建、组装、打包脚本
 ├─ setup.iss      # Inno Setup 安装脚本
-├─ version.txt    # 当前版本号（每次打包自增，见下文）
+├─ version.txt    # 当前版本号（由 -Version 控制，见下文）
 ├─ assets/        # 预留的图标等资源目录
 └─ publish/       # 构建产物（已 gitignore）
    ├─ app/                          # 待安装的程序集
@@ -63,16 +63,16 @@ pwsh ./build.ps1 -Configuration Debug
 
 ## 参数
 
-| 参数               | 类型                 | 默认值    | 说明                                                                                       |
-| ------------------ | -------------------- | --------- | ------------------------------------------------------------------------------------------ |
-| `-Configuration`   | `Debug` \| `Release` | `Release` | 传给 `dotnet publish` 的配置。                                                             |
-| `-Version`         | `string`             | 空        | 指定本次安装包版本号（`x.y.z`）。优先于 `version.txt` 自增；打包成功后回写 `version.txt`。 |
-| `-SkipClean`       | `switch`             | 关        | 跳过清理 `publish/app` 与旧的 `*.exe`，做增量构建。                                        |
-| `-SkipVueInstall`  | `switch`             | 关        | 跳过 `pnpm install`（`node_modules` 已是最新时可选）。                                     |
-| `-SkipVue`         | `switch`             | 关        | 跳过后端前端构建与组装，复用上一次的 `dist`。                                              |
-| `-SkipApi`         | `switch`             | 关        | 跳过 Web 与 sitecli 的发布，复用上一次的 `Dependencies/api`。                              |
-| `-SkipAppLauncher` | `switch`             | 关        | 跳过 AppLauncher 的发布，复用上一次的程序集。                                              |
-| `-SkipInstaller`   | `switch`             | 关        | 只构建并组装，不调用 Inno Setup 打包；此时不会读写 `version.txt`。                         |
+| 参数               | 类型                 | 默认值    | 说明                                                                                           |
+| ------------------ | -------------------- | --------- | ---------------------------------------------------------------------------------------------- |
+| `-Configuration`   | `Debug` \| `Release` | `Release` | 传给 `dotnet publish` 的配置。                                                                 |
+| `-Version`         | `string`             | 空        | 版本控制：不传用 `version.txt`；传 `+N` / `+x.y.z` 递增；传 `x.y.z` 直接指定。详细规则见下文。 |
+| `-SkipClean`       | `switch`             | 关        | 跳过清理 `publish/app` 与旧的 `*.exe`，做增量构建。                                            |
+| `-SkipVueInstall`  | `switch`             | 关        | 跳过 `pnpm install`（`node_modules` 已是最新时可选）。                                         |
+| `-SkipVue`         | `switch`             | 关        | 跳过后端前端构建与组装，复用上一次的 `dist`。                                                  |
+| `-SkipApi`         | `switch`             | 关        | 跳过 Web 与 sitecli 的发布，复用上一次的 `Dependencies/api`。                                  |
+| `-SkipAppLauncher` | `switch`             | 关        | 跳过 AppLauncher 的发布，复用上一次的程序集。                                                  |
+| `-SkipInstaller`   | `switch`             | 关        | 只构建并组装，不调用 Inno Setup 打包；此时不会读写 `version.txt`。                             |
 
 ### 常见用法
 
@@ -82,6 +82,12 @@ pwsh ./build.ps1 -SkipVue -SkipClean
 
 # 前端依赖已安装，跳过 pnpm install
 pwsh ./build.ps1 -SkipVueInstall
+
+# 在当前版本上递增 patch 段（成功后写回 version.txt）
+pwsh ./build.ps1 -Version +1
+
+# 递增指定段（逐段相加、不进位）
+pwsh ./build.ps1 -Version +0.1.0
 
 # 指定版本号发布（成功后写回 version.txt）
 pwsh ./build.ps1 -Version 2.0.0
@@ -100,15 +106,21 @@ pwsh ./build.ps1 -SkipVue -SkipApi -SkipAppLauncher -SkipClean
 
 版本来源为项目根目录的 `version.txt`（单行纯文本，格式 `x.y.z`）。
 
-- **不传 `-Version`**：读取 `version.txt` 并将**最后一段 patch 加 1**（`1.1.1 → 1.1.2`）。
-- **传入 `-Version`**：直接使用传入值（格式非法会立即报错）。
+- **不传 `-Version`**：直接使用 `version.txt` 中的版本号，**不递增**。
+- **传入 `+N`**：在当前版本上只增加 patch 段（`+1` 等价于 `+0.0.1`）。
+- **传入 `+x.y.z`**：在当前版本上逐段相加，**不跨段进位**（`1.1.6 + +1.2.3 = 2.3.9`）。
+- **传入 `x.y.z`**：直接使用传入值（格式非法会立即报错）。
 - **写回时机**：仅当 Inno Setup **编译成功后**才写回 `version.txt`，因此打包失败不会产生版本缺口。
 - **`-SkipInstaller`**：不读取也不更新 `version.txt`。
+- **时间戳**：不传 `-Version` 时也会写回同值，从而刷新 `version.txt` 的修改时间。
 
 ```pwsh
-# version.txt = 1.1.1
-pwsh ./build.ps1                 # -> AppLauncher-Setup-1.1.2.exe，version.txt 写回 1.1.2
-pwsh ./build.ps1 -Version 2.0.0  # -> AppLauncher-Setup-2.0.0.exe，version.txt 写回 2.0.0
+# version.txt = 1.1.6
+pwsh ./build.ps1                   # -> AppLauncher-Setup-1.1.6.exe，version.txt 内容不变、时间戳刷新
+pwsh ./build.ps1 -Version +1       # -> AppLauncher-Setup-1.1.7.exe，version.txt 写回 1.1.7
+pwsh ./build.ps1 -Version +0.1.0   # -> AppLauncher-Setup-1.2.6.exe，version.txt 写回 1.2.6
+pwsh ./build.ps1 -Version +1.2.3   # -> AppLauncher-Setup-2.3.9.exe，version.txt 写回 2.3.9
+pwsh ./build.ps1 -Version 2.0.0    # -> AppLauncher-Setup-2.0.0.exe，version.txt 写回 2.0.0
 ```
 
 > `version.txt` 需要纳入版本控制；文件缺失或格式非法时脚本会报错退出。
