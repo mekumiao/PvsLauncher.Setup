@@ -1,15 +1,15 @@
-﻿; PvsAppLauncher 安装包脚本 (Inno Setup 7.x)
+﻿; PvsLauncher 安装包脚本 (Inno Setup 7.x)
 ; 由 build.ps1 调用，并通过 /DMyAppVersion=<版本> 注入版本号。
 ;
-; 安装模式：免管理员，默认装到当前用户目录 (%LocalAppData%\Programs\PvsAppLauncher)。
+; 安装模式：免管理员，默认装到当前用户目录 (%LocalAppData%\Programs\PvsLauncher)。
 ; 前置组件（.NET 10 运行时 / Windows App Runtime 2.5.1 / VC++ 运行库）需用户自行预先安装。
 
-#define MyAppName "PvsAppLauncher"
+#define MyAppName "PvsLauncher"
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
 #endif
 #define MyAppPublisher "mekumiao"
-#define MyAppExeName "PvsAppLauncher.exe"
+#define MyAppExeName "PvsLauncher.exe"
 
 [Setup]
 AppId={{B9A8F1C2-3D4E-4F5A-8B6C-7D8E9F0A1B2C}
@@ -35,14 +35,14 @@ WizardStyle=windows11 dynamic
 WizardSmallImageFile=assets\icons-384.png
 WizardSmallImageFileDynamicDark=assets\icons-384.png
 ; Setup / 卸载程序主图标，多分辨率（16/24/32/48/64/128/256）。
-SetupIconFile=assets\PvsAppLauncher.ico
-UninstallDisplayIcon={app}\PvsAppLauncher.ico
+SetupIconFile=assets\PvsLauncher.ico
+UninstallDisplayIcon={app}\PvsLauncher.ico
 SetupLogging=yes
 
 ; 卸载时的数据清理选项（选择模式窗体）。
 [CustomMessages]
 chinesesimplified.UninstallOptionsTitle=卸载选项
-chinesesimplified.UninstallOptionsText=请选择要一并删除的数据，未勾选项将保留。%n%n请先退出 PvsAppLauncher 再继续。
+chinesesimplified.UninstallOptionsText=请选择要一并删除的数据，未勾选项将保留。%n%n请先退出 PvsLauncher 再继续。
 chinesesimplified.UninstallRemoveUserData=删除用户配置与缓存（%LOCALAPPDATA%\PvsAppLauncher）
 chinesesimplified.UninstallOptionsConfirm=开始卸载
 chinesesimplified.UninstallOptionsCancel=取消
@@ -57,12 +57,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; 排除调试符号与运行期状态文件，安装包与安装目录都不包含 *.pdb / launcher.state.yaml。
 Source: "publish\app\*"; DestDir: "{app}"; Excludes: "*.pdb,launcher.state.yaml"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; 应用图标随包安装，供快捷方式与卸载项引用。
-Source: "assets\PvsAppLauncher.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\PvsLauncher.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\PvsAppLauncher.ico"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\PvsLauncher.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\PvsAppLauncher.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\PvsLauncher.ico"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
@@ -167,6 +167,6 @@ begin
       Exit;
 
     if RemoveUserData then
-      DelTree(ExpandConstant('{localappdata}\PvsAppLauncher'), True, True, True);
+      DelTree(ExpandConstant('{localappdata}\PvsLauncher'), True, True, True);
   end;
 end;
