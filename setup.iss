@@ -35,8 +35,8 @@ WizardStyle=windows11 dynamic
 WizardSmallImageFile=assets\icons-384.png
 WizardSmallImageFileDynamicDark=assets\icons-384.png
 ; Setup / 卸载程序主图标，多分辨率（16/24/32/48/64/128/256）。
-SetupIconFile=assets\PvsLauncher.ico
-UninstallDisplayIcon={app}\PvsLauncher.ico
+SetupIconFile=assets\app.ico
+UninstallDisplayIcon={app}\app.ico
 SetupLogging=yes
 
 ; 卸载时的数据清理选项（选择模式窗体）。
@@ -57,12 +57,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; 排除调试符号与运行期状态文件，安装包与安装目录都不包含 *.pdb / launcher.state.yaml。
 Source: "publish\app\*"; DestDir: "{app}"; Excludes: "*.pdb,launcher.state.yaml"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; 应用图标随包安装，供快捷方式与卸载项引用。
-Source: "assets\PvsLauncher.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\PvsLauncher.ico"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\app.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\PvsLauncher.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\app.ico"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
