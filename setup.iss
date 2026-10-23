@@ -12,7 +12,7 @@
 #define MyAppExeName "PvsLauncher.exe"
 
 [Setup]
-AppId={{B9A8F1C2-3D4E-4F5A-8B6C-7D8E9F0A1B2C}
+AppId={{C730741A-09D7-48B9-83EF-BF7D2B4118E8}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
