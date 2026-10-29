@@ -39,14 +39,6 @@ SetupIconFile=assets\app.ico
 UninstallDisplayIcon={app}\app.ico
 SetupLogging=yes
 
-; 卸载时的数据清理选项（选择模式窗体）。
-[CustomMessages]
-chinesesimplified.UninstallOptionsTitle=卸载选项
-chinesesimplified.UninstallOptionsText=请选择要一并删除的数据，未勾选项将保留。%n%n请先退出 PvsLauncher 再继续。
-chinesesimplified.UninstallRemoveUserData=删除用户配置与缓存（%LOCALAPPDATA%\PvsAppLauncher）
-chinesesimplified.UninstallOptionsConfirm=开始卸载
-chinesesimplified.UninstallOptionsCancel=取消
-
 [Languages]
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
@@ -67,106 +59,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
-; 卸载时删除整个安装目录（含 Dependencies / Configs 等运行期残留）；用户数据在 [Code] 中按需删除。
+; 卸载时仅删除整个安装目录（含 Dependencies / Configs 等运行期残留）；
+; 用户运行态数据（%LOCALAPPDATA%\PvsLauncher）一律保留。
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
-
-; 卸载前弹出「选择模式」窗体，由用户勾选是否删除用户数据；静默卸载不询问、保留用户数据。
-[Code]
-var
-  RemoveUserData: Boolean;
-  UninstallCancelled: Boolean;
-
-{ 显示卸载选项窗体；用户取消时置 UninstallCancelled 以中止卸载。 }
-procedure ShowUninstallOptions;
-var
-  Form: TSetupForm;
-  Info: TNewStaticText;
-  UserDataCheck: TNewCheckBox;
-  ConfirmButton, CancelButton: TNewButton;
-  W: Integer;
-begin
-  Form := CreateCustomForm(ScaleX(400), ScaleY(170), False, False);
-  try
-    Form.Caption := ExpandConstant('{cm:UninstallOptionsTitle}');
-
-    Info := TNewStaticText.Create(Form);
-    Info.Parent := Form;
-    Info.Left := ScaleX(16);
-    Info.Top := ScaleY(12);
-    Info.Width := Form.ClientWidth - ScaleX(32);
-    Info.Height := ScaleY(66);
-    Info.AutoSize := False;
-    Info.WordWrap := True;
-    Info.Caption := ExpandConstant('{cm:UninstallOptionsText}');
-
-    UserDataCheck := TNewCheckBox.Create(Form);
-    UserDataCheck.Parent := Form;
-    UserDataCheck.Left := ScaleX(16);
-    UserDataCheck.Top := Info.Top + Info.Height + ScaleY(8);
-    UserDataCheck.Width := Form.ClientWidth - ScaleX(32);
-    UserDataCheck.Height := ScaleY(20);
-    UserDataCheck.Caption := ExpandConstant('{cm:UninstallRemoveUserData}');
-    UserDataCheck.Checked := False;
-
-    ConfirmButton := TNewButton.Create(Form);
-    ConfirmButton.Parent := Form;
-    ConfirmButton.Caption := ExpandConstant('{cm:UninstallOptionsConfirm}');
-    ConfirmButton.ModalResult := mrOk;
-    ConfirmButton.Default := True;
-
-    CancelButton := TNewButton.Create(Form);
-    CancelButton.Parent := Form;
-    CancelButton.Caption := ExpandConstant('{cm:UninstallOptionsCancel}');
-    CancelButton.ModalResult := mrCancel;
-    CancelButton.Cancel := True;
-
-    W := Form.CalculateButtonWidth([ConfirmButton.Caption, CancelButton.Caption]);
-    ConfirmButton.Width := W;
-    CancelButton.Width := W;
-    ConfirmButton.Height := ScaleY(25);
-    CancelButton.Height := ScaleY(25);
-    CancelButton.Left := Form.ClientWidth - ScaleX(12) - CancelButton.Width;
-    ConfirmButton.Left := CancelButton.Left - ScaleX(8) - ConfirmButton.Width;
-    ConfirmButton.Top := Form.ClientHeight - ScaleY(12) - ConfirmButton.Height;
-    CancelButton.Top := ConfirmButton.Top;
-
-    Form.ActiveControl := ConfirmButton;
-
-    if Form.ShowModal() = mrOk then
-      RemoveUserData := UserDataCheck.Checked
-    else
-      UninstallCancelled := True;
-  finally
-    Form.Free();
-  end;
-end;
-
-function InitializeUninstall: Boolean;
-begin
-  RemoveUserData := False;
-  UninstallCancelled := False;
-
-  { 静默卸载不弹窗，保留用户数据。 }
-  if UninstallSilent then
-  begin
-    Result := True;
-    Exit;
-  end;
-
-  ShowUninstallOptions;
-  Result := not UninstallCancelled;
-end;
-
-procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
-begin
-  if CurUninstallStep = usPostUninstall then
-  begin
-    { 安装目录已由 [UninstallDelete] 整体删除；静默卸载不弹窗、保留用户数据。 }
-    if UninstallSilent then
-      Exit;
-
-    if RemoveUserData then
-      DelTree(ExpandConstant('{localappdata}\PvsLauncher'), True, True, True);
-  end;
-end;
