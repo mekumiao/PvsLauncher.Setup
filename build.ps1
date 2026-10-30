@@ -11,10 +11,11 @@
     发布配置，默认 Release。
 
 .PARAMETER Version
-    指定本次安装包版本号，支持三种形式：
+    指定本次构建版本号，支持三种形式：
     - 不传：直接使用 version.txt 中的版本号（不递增）。
     - +N 或 +x.y.z：在当前 version.txt 版本上递增。+N 只加 patch 段；+x.y.z 逐段相加且不进位。
     - x.y.z：直接使用该版本号。
+    版本号会通过 -p:Version 注入 PvsLauncher，并作为安装包版本；
     打包成功后回写 version.txt（即使版本号未变也会刷新文件时间戳）。
 
 .PARAMETER SkipClean
@@ -33,7 +34,8 @@
     跳过 PvsLauncher 的发布（复用上一次的程序集）。
 
 .PARAMETER SkipInstaller
-    只构建并组装，不调用 Inno Setup 打包。
+    只构建并组装，不调用 Inno Setup 打包。版本号仍会从 version.txt 读取并注入
+    PvsLauncher，但不回写 version.txt。
 
 .EXAMPLE
     pwsh ./build.ps1
@@ -283,27 +285,26 @@ else {
     Write-Host '    dotnet / pnpm 就绪（已跳过安装包）' -ForegroundColor Green
 }
 
-$AppVersion = $null
-if (-not $SkipInstaller) {
-    if (-not $Version) {
-        $AppVersion = Read-CurrentVersion
-        Write-Host "    打包版本: $AppVersion（使用 version.txt 当前值，不递增）"
-    }
-    elseif ($Version -match '^\+') {
-        $currentVersion = Read-CurrentVersion
-        $AppVersion = Get-IncrementedVersion -Current $currentVersion -Delta $Version
-        Write-Host "    打包版本: $AppVersion（version.txt: $currentVersion 递增 $Version）"
-    }
-    elseif ($Version -match '^\d+\.\d+\.\d+$') {
-        $AppVersion = $Version
-        Write-Host "    打包版本: $AppVersion（由 -Version 指定）"
-    }
-    else {
-        throw "版本号格式非法（应为 x.y.z、+N 或 +x.y.z）：$Version"
-    }
+# 版本号：始终解析，供 PvsLauncher 的 -p:Version 与安装包共用；回写 version.txt 只发生在打包成功后。
+if (-not $Version) {
+    $AppVersion = Read-CurrentVersion
+    Write-Host "    构建版本: $AppVersion（使用 version.txt 当前值，不递增）"
+}
+elseif ($Version -match '^\+') {
+    $currentVersion = Read-CurrentVersion
+    $AppVersion = Get-IncrementedVersion -Current $currentVersion -Delta $Version
+    Write-Host "    构建版本: $AppVersion（version.txt: $currentVersion 递增 $Version）"
+}
+elseif ($Version -match '^\d+\.\d+\.\d+$') {
+    $AppVersion = $Version
+    Write-Host "    构建版本: $AppVersion（由 -Version 指定）"
 }
 else {
-    Write-Host '    已跳过安装包，不读取/更新 version.txt'
+    throw "版本号格式非法（应为 x.y.z、+N 或 +x.y.z）：$Version"
+}
+
+if ($SkipInstaller) {
+    Write-Host '    已跳过安装包：版本仅注入 launcher，不回写 version.txt'
 }
 
 # ----------------------------------------------------------------------------
@@ -381,12 +382,15 @@ if (-not $SkipVue) {
 # ----------------------------------------------------------------------------
 if (-not $SkipAppLauncher) {
     Invoke-Step -Name '发布 PvsLauncher' -Action {
-        Invoke-External -FilePath 'dotnet' -Arguments @(
+        $launcherArgs = @(
             'publish', $LauncherProject,
             '-c', $Configuration,
             '-r', 'win-x64',
             '-o', $AppRoot
         )
+        # 让程序集 InformationalVersion（AppInfo.DisplayVersion）与安装包版本一致。
+        $launcherArgs += "-p:Version=$AppVersion"
+        Invoke-External -FilePath 'dotnet' -Arguments $launcherArgs
     }
 }
 
