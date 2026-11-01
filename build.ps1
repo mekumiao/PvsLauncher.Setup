@@ -6,6 +6,7 @@
 .DESCRIPTION
     依次发布 Web、sitecli、前端 dist 与 PvsLauncher，按 launcher.yaml 期望的目录结构组装到
     PvsLauncher.Setup/publish/app，最后调用 Inno Setup 生成安装包到 PvsLauncher.Setup/publish。
+    安装包按版本号命名并累积保存：publish/ 下的历史安装包不会在构建时被删除。
 
 .PARAMETER Configuration
     发布配置，默认 Release。
@@ -19,7 +20,7 @@
     打包成功后回写 version.txt（即使版本号未变也会刷新文件时间戳）。
 
 .PARAMETER SkipClean
-    跳过程序集与安装包的清理，做增量构建。
+    跳过 publish/app 程序集的清理，做增量构建。历史安装包不受影响。
 
 .PARAMETER SkipVueInstall
     跳过 pnpm install（node_modules 已存在且最新时可选）。
@@ -311,10 +312,10 @@ if ($SkipInstaller) {
 # 清理
 # ----------------------------------------------------------------------------
 if (-not $SkipClean) {
-    Invoke-Step -Name '清理旧的发布输出' -Action {
+    Invoke-Step -Name '清理旧的程序集输出' -Action {
+        # 只清理 publish/app：旧的程序集必须全量重建，否则残留文件会混进安装包。
+        # publish 根目录的安装包按版本号累积，历史产物一律保留，不在此处删除。
         Reset-Directory -Path $AppRoot
-        Get-ChildItem -LiteralPath $PublishRoot -Filter '*.exe' -File -ErrorAction SilentlyContinue |
-        Remove-Item -Force
     }
 }
 else {

@@ -22,7 +22,7 @@
 ## Commands
 
 ```pwsh
-# 完整构建 + 组装 + 打包（默认清理旧输出）
+# 完整构建 + 组装 + 打包（只清理 publish/app，历史安装包保留）
 pwsh ./build.ps1
 
 # 复用前端 dist、增量构建后重新打包
@@ -64,4 +64,5 @@ pwsh ./build.ps1 -SkipInstaller
 - **调试符号与状态文件**：`setup.iss` 的 `[Files]` 用 `Excludes: "*.pdb,launcher.state.yaml"` 排除；`build.ps1` 打包前也会清理 `publish/app` 下 `*.pdb` 与 `launcher.state.yaml`（后者是运行期生成的状态文件，不应随包分发）。
 - **上游已知问题**（不在本仓库范围，勿在打包脚本里“修复”）：`PvsLauncher/.../launcher.yaml` 的 nginx 模板路径写作 `./Configs/conf/nginx.conf.template`，但实际文件是 `Configs/nginx.conf.template`（无 `conf/` 子目录），安装后首启可能找不到模板。发现时应指出，而不是默默改 `build.ps1`。
 - `publish/` 已被 `.gitignore` 忽略；`.gitignore` 只额外忽略 `*.exe`。
+- **历史安装包不清理**：`build.ps1` 的清理步骤只重置 `publish/app`，`publish/` 根目录下的 `PvsLauncher-Setup-*.exe` 按版本累积保留。不要重新加回 `Get-ChildItem -Filter '*.exe' | Remove-Item` 之类的逻辑。同版本重打包时 Inno 会覆盖同名安装包，属预期行为。
 - 构建产物较大（安装包约 160 MB），验证时避免重复全量打包；可用 `-SkipVue -SkipClean` 加速。
