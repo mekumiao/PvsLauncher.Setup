@@ -456,7 +456,7 @@ function Format-CommitSubject {
     return $Subject.Replace('[', '\[').Replace(']', '\]')
 }
 
-function Render-Changelog {
+function Out-Changelog {
     param(
         [Parameter(Mandatory)][string]$Version,
         [string]$PreviousVersion,
@@ -500,7 +500,7 @@ function Render-Changelog {
     return (($lines -join "`n").TrimEnd() + "`n")
 }
 
-function Render-Index {
+function Out-Index {
     param([Parameter(Mandatory)]$State)
 
     $lines = [System.Collections.Generic.List[string]]::new()
@@ -718,7 +718,7 @@ else {
         Write-Host ("    {0,-28} {1,3} 条" -f $repo.Name, $entries.Count)
     }
 
-    $Notes = Render-Changelog -Version $AppVersion -PreviousVersion $PreviousVersion -Changes $Changes -Date $Today
+    $Notes = Out-Changelog -Version $AppVersion -PreviousVersion $PreviousVersion -Changes $Changes -Date $Today
 }
 
 if ($DryRun) {
@@ -820,7 +820,7 @@ Invoke-Step -Name '生成更新日志与基线' -Action {
     }
 
     Save-ReleaseState -State $State
-    Write-TextFile -Path $IndexFile -Content (Render-Index -State $State)
+    Write-TextFile -Path $IndexFile -Content (Out-Index -State $State)
     Write-Host '    已更新 CHANGELOG.md'
 }
 
