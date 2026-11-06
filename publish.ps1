@@ -9,7 +9,8 @@
     2. 调用 build.ps1 构建安装包 publish/PvsLauncher-Setup-<版本>.exe；
     3. 生成 changelog/v<版本>.md 与 CHANGELOG.md，并记录本次基线；
     4. 提交 version.txt 与日志文件，推送到 github 远端；
-    5. 在推送后的提交上创建或更新 GitHub Release，上传安装包与 SHA256 校验文件。
+    5. 在推送后的提交上创建或更新 GitHub Release（先设为草稿），上传安装包与 SHA256 校验文件并校验大小，
+       全部成功后再正式发布（draft=false）。
 
     首次记录以 changelog/state.json 中 1.1.14 的基线为起点，1.1.14 及更早版本不生成日志。
     GitHub 推送只使用 github 远端；origin（Gitee）不会被动到。
@@ -22,6 +23,9 @@
 
 .PARAMETER SkipUpload
     完成构建、日志、提交与推送，但不创建/更新 GitHub Release。
+
+.PARAMETER KeepDraft
+    只创建/更新草稿 Release 并上传资产，保持草稿状态不发布（便于人工确认后再公开）。
 
 .PARAMETER NoPush
     只在本地生成并提交，不推送、不创建 Release。
@@ -74,6 +78,7 @@ param(
 
     [switch]$SkipBuild,
     [switch]$SkipUpload,
+    [switch]$KeepDraft,
     [switch]$NoPush,
     [switch]$DryRun,
     [switch]$Regenerate,
@@ -594,9 +599,15 @@ function Send-ReleaseAsset {
         ) -join "`n") + "`n"
 
     $previousEncoding = [Console]::OutputEncoding
+
+    # 超过 1 MB 的附件显示 curl 进度条（写 stderr）；stderr 被重定向时保持静默。
+    $fileSize = (Get-Item -LiteralPath $Path).Length
+    $showProgress = ($fileSize -gt 1MB) -and (-not [Console]::IsErrorRedirected)
+    $progressOption = if ($showProgress) { '--progress-bar' } else { '--silent' }
+
     try {
         [Console]::OutputEncoding = $Utf8Encoding
-        $output = $curlConfig | & curl.exe --silent --show-error --fail-with-body `
+        $output = $curlConfig | & curl.exe $progressOption --show-error --fail-with-body `
             --connect-timeout 30 --retry 3 --retry-delay 2 `
             --request POST --config - --data-binary "@$Path" $UploadUrl
         $exitCode = $LASTEXITCODE
@@ -742,8 +753,11 @@ if ($DryRun) {
     if ($SkipUpload -or $NoPush) {
         Write-Host '    Release: 跳过'
     }
+    elseif ($KeepDraft) {
+        Write-Host "    Release: v$AppVersion（草稿 → 上传资产，保持草稿）"
+    }
     else {
-        Write-Host "    Release: v$AppVersion（创建或更新）"
+        Write-Host "    Release: v$AppVersion（草稿 → 上传资产 → 发布）"
     }
     return
 }
@@ -877,82 +891,145 @@ if (-not $NoPush) {
 # Release
 # ----------------------------------------------------------------------------
 if ($needUpload) {
-    Invoke-Step -Name "发布 GitHub Release v$AppVersion" -Action {
+    $releaseStepName = if ($KeepDraft) { "上传草稿 Release v$AppVersion" } else { "发布 GitHub Release v$AppVersion" }
+    Invoke-Step -Name $releaseStepName -Action {
         $tag = "v$AppVersion"
         $releaseBody = $Notes.TrimEnd() + "`n`n---`n`n" +
         "- 安装包：PvsLauncher-Setup-$AppVersion.exe`n" +
         "- SHA256：$Sha256`n`n" +
         '安装前请先安装 .NET 10 Desktop/ASP.NET Core 运行时、Windows App Runtime 2.5.1、VC++ x64 运行库。' + "`n"
 
-        $tagUri = "https://api.github.com/repos/$Repository/releases/tags/$([uri]::EscapeDataString($tag))"
-        $existingRelease = Invoke-GitHubRest -Method Get -Uri $tagUri
-
-        if ($existingRelease.StatusCode -eq 404) {
-            $payload = [ordered]@{
-                tag_name         = $tag
-                target_commitish = $commitSha
-                name             = $tag
-                body             = $releaseBody
-                draft            = $false
-                prerelease       = $false
-                make_latest      = 'true'
-            }
-            $created = Invoke-GitHubRest -Method Post -Uri "https://api.github.com/repos/$Repository/releases" -Body $payload
-            if ($created.StatusCode -ne 201) {
-                throw "创建 Release 失败（HTTP $($created.StatusCode)）：$($created.Content)"
-            }
-            $release = $created.Content | ConvertFrom-Json
-            Write-Host "    已创建 Release $tag（提交 $commitSha）"
-        }
-        elseif ($existingRelease.StatusCode -eq 200) {
-            $release = $existingRelease.Content | ConvertFrom-Json
-            $payload = [ordered]@{
-                name        = $tag
-                body        = $releaseBody
-                make_latest = 'true'
-            }
-            $updated = Invoke-GitHubRest -Method Patch -Uri "https://api.github.com/repos/$Repository/releases/$($release.id)" -Body $payload
-            if ($updated.StatusCode -ne 200) {
-                throw "更新 Release 失败（HTTP $($updated.StatusCode)）：$($updated.Content)"
-            }
-            $release = $updated.Content | ConvertFrom-Json
-            Write-Host "    已更新 Release $tag"
-        }
-        else {
-            throw "查询 Release 失败（HTTP $($existingRelease.StatusCode)）：$($existingRelease.Content)"
+        # 草稿 Release 不会出现在 /releases/tags/{tag}，必须从列表接口里找（有写权限的 token 才能看到草稿）。
+        $release = $null
+        $listResponse = Invoke-GitHubRest -Method Get -Uri "https://api.github.com/repos/$Repository/releases?per_page=100"
+        if ($listResponse.StatusCode -eq 200) {
+            $release = @($listResponse.Content | ConvertFrom-Json) |
+                Where-Object { $_.tag_name -eq $tag } |
+                Select-Object -First 1
         }
 
-        $assetsResponse = Invoke-GitHubRest -Method Get -Uri "https://api.github.com/repos/$Repository/releases/$($release.id)/assets?per_page=100"
-        if ($assetsResponse.StatusCode -ne 200) {
-            throw "查询 Release 资产失败（HTTP $($assetsResponse.StatusCode)）：$($assetsResponse.Content)"
+        if (-not $release) {
+            $tagUri = "https://api.github.com/repos/$Repository/releases/tags/$([uri]::EscapeDataString($tag))"
+            $existingRelease = Invoke-GitHubRest -Method Get -Uri $tagUri
+            if ($existingRelease.StatusCode -eq 200) {
+                $release = $existingRelease.Content | ConvertFrom-Json
+            }
+            elseif ($existingRelease.StatusCode -ne 404) {
+                throw "查询 Release 失败（HTTP $($existingRelease.StatusCode)）：$($existingRelease.Content)"
+            }
         }
-        $existingAssets = @($assetsResponse.Content | ConvertFrom-Json)
 
-        $assetFiles = @(
-            [pscustomobject]@{ Path = $InstallerPath; Name = (Split-Path -Leaf $InstallerPath) }
-            [pscustomobject]@{ Path = $ShaFile; Name = (Split-Path -Leaf $ShaFile) }
-        )
-
-        foreach ($assetFile in $assetFiles) {
-            $existingAsset = $existingAssets | Where-Object { $_.name -eq $assetFile.Name } | Select-Object -First 1
-            if ($existingAsset) {
-                $deleted = Invoke-GitHubRest -Method Delete -Uri "https://api.github.com/repos/$Repository/releases/assets/$($existingAsset.id)"
-                if ($deleted.StatusCode -ne 204) {
-                    throw "删除旧资产 $($assetFile.Name) 失败（HTTP $($deleted.StatusCode)）：$($deleted.Content)"
+        $published = $false
+        $wasPublished = $false
+        try {
+            if (-not $release) {
+                $payload = [ordered]@{
+                    tag_name         = $tag
+                    target_commitish = $commitSha
+                    name             = $tag
+                    body             = $releaseBody
+                    draft            = $true
+                    prerelease       = $false
                 }
-                Write-Host "    已删除旧资产 $($assetFile.Name)"
+                $created = Invoke-GitHubRest -Method Post -Uri "https://api.github.com/repos/$Repository/releases" -Body $payload
+                if ($created.StatusCode -ne 201) {
+                    throw "创建草稿 Release 失败（HTTP $($created.StatusCode)）：$($created.Content)"
+                }
+                $release = $created.Content | ConvertFrom-Json
+                Write-Host "    已创建草稿 Release $tag（提交 $commitSha）"
+            }
+            else {
+                # 已发布的 Release 先摘成草稿，替换资产期间不对外暴露半成品。
+                $wasPublished = -not [bool]$release.draft
+                $payload = [ordered]@{
+                    name       = $tag
+                    body       = $releaseBody
+                    draft      = $true
+                    prerelease = $false
+                }
+                if ($release.draft) {
+                    # 草稿的 tag 尚未创建，发布时才定位到本次提交。
+                    $payload['target_commitish'] = $commitSha
+                }
+                $updated = Invoke-GitHubRest -Method Patch -Uri "https://api.github.com/repos/$Repository/releases/$($release.id)" -Body $payload
+                if ($updated.StatusCode -ne 200) {
+                    throw "将 Release 置为草稿失败（HTTP $($updated.StatusCode)）：$($updated.Content)"
+                }
+                $release = $updated.Content | ConvertFrom-Json
+                Write-Host "    已将 Release $tag 置为草稿"
             }
 
-            $uploadUrl = "https://uploads.github.com/repos/$Repository/releases/$($release.id)/assets?name=$([uri]::EscapeDataString($assetFile.Name))"
-            $uploaded = Send-ReleaseAsset -UploadUrl $uploadUrl -Path $assetFile.Path -Name $assetFile.Name
-            $localSize = (Get-Item -LiteralPath $assetFile.Path).Length
-            if ([long]$uploaded.size -ne [long]$localSize) {
-                throw "资产 $($assetFile.Name) 大小不一致（远端 $($uploaded.size) / 本地 $localSize）"
+            $assetsResponse = Invoke-GitHubRest -Method Get -Uri "https://api.github.com/repos/$Repository/releases/$($release.id)/assets?per_page=100"
+            if ($assetsResponse.StatusCode -ne 200) {
+                throw "查询 Release 资产失败（HTTP $($assetsResponse.StatusCode)）：$($assetsResponse.Content)"
             }
-            Write-Host ("    已上传 {0} ({1:n1} MB)" -f $assetFile.Name, ($localSize / 1MB))
+            $existingAssets = @($assetsResponse.Content | ConvertFrom-Json)
+
+            $assetFiles = @(
+                [pscustomobject]@{ Path = $InstallerPath; Name = (Split-Path -Leaf $InstallerPath) }
+                [pscustomobject]@{ Path = $ShaFile; Name = (Split-Path -Leaf $ShaFile) }
+            )
+
+            foreach ($assetFile in $assetFiles) {
+                $existingAsset = $existingAssets | Where-Object { $_.name -eq $assetFile.Name } | Select-Object -First 1
+                if ($existingAsset) {
+                    $deleted = Invoke-GitHubRest -Method Delete -Uri "https://api.github.com/repos/$Repository/releases/assets/$($existingAsset.id)"
+                    if ($deleted.StatusCode -ne 204) {
+                        throw "删除旧资产 $($assetFile.Name) 失败（HTTP $($deleted.StatusCode)）：$($deleted.Content)"
+                    }
+                    Write-Host "    已删除旧资产 $($assetFile.Name)"
+                }
+
+                $uploadUrl = "https://uploads.github.com/repos/$Repository/releases/$($release.id)/assets?name=$([uri]::EscapeDataString($assetFile.Name))"
+                $uploaded = Send-ReleaseAsset -UploadUrl $uploadUrl -Path $assetFile.Path -Name $assetFile.Name
+                $localSize = (Get-Item -LiteralPath $assetFile.Path).Length
+                if ([long]$uploaded.size -ne [long]$localSize) {
+                    throw "资产 $($assetFile.Name) 大小不一致（远端 $($uploaded.size) / 本地 $localSize）"
+                }
+                Write-Host ("    已上传 {0} ({1:n1} MB)" -f $assetFile.Name, ($localSize / 1MB))
+            }
+
+            if ($KeepDraft) {
+                if ($wasPublished) {
+                    Write-Host "    Release $tag 原本已发布，现已下线为草稿（-KeepDraft），确认后请手动重新发布" -ForegroundColor Yellow
+                }
+                else {
+                    Write-Host "    Release $tag 保持草稿（-KeepDraft），确认后可在网页上手动发布" -ForegroundColor Yellow
+                }
+                return
+            }
+
+            # 单独一次 PATCH 取消草稿，确保 draft=false 生效后再继续。
+            $publishResult = Invoke-GitHubRest -Method Patch -Uri "https://api.github.com/repos/$Repository/releases/$($release.id)" -Body ([ordered]@{ draft = $false })
+            if ($publishResult.StatusCode -ne 200) {
+                throw "发布 Release 失败（HTTP $($publishResult.StatusCode)）：$($publishResult.Content)"
+            }
+            $release = $publishResult.Content | ConvertFrom-Json
+            if ($release.draft -or -not $release.published_at) {
+                throw "发布 Release 后状态异常（draft=$($release.draft), published_at=$($release.published_at)）"
+            }
+            $published = $true
+            Write-Host "    已发布 Release $tag"
+
+            # latest 单独设置，失败只告警：发布本身已经成功。
+            $latestResult = Invoke-GitHubRest -Method Patch -Uri "https://api.github.com/repos/$Repository/releases/$($release.id)" -Body ([ordered]@{ make_latest = 'true' })
+            if ($latestResult.StatusCode -ne 200) {
+                Write-Host "    [提示] 设置 latest 失败（HTTP $($latestResult.StatusCode)）：$($latestResult.Content)" -ForegroundColor Yellow
+            }
+
+            Write-Host "    Release: https://github.com/$Repository/releases/tag/$tag" -ForegroundColor Green
         }
-
-        Write-Host "    Release: https://github.com/$Repository/releases/tag/$tag" -ForegroundColor Green
+        catch {
+            if (-not $published -and $release) {
+                if ($wasPublished) {
+                    Write-Host "    Release $tag 原本已发布，现在停留在草稿状态（未公开）；修复后重跑同一版本即可续传。" -ForegroundColor Yellow
+                }
+                else {
+                    Write-Host "    Release $tag 仍是草稿（未公开），修复后重跑同一版本即可继续。" -ForegroundColor Yellow
+                }
+            }
+            throw
+        }
     }
 }
 
@@ -965,6 +1042,9 @@ if ($NoPush) {
 }
 elseif ($SkipUpload) {
     Write-Host '已推送到 GitHub，按 -SkipUpload 跳过 Release。'
+}
+elseif ($KeepDraft) {
+    Write-Host "已上传到草稿 Release v$AppVersion（-KeepDraft），确认后请手动发布。" -ForegroundColor Yellow
 }
 else {
     Write-Host "已发布: https://github.com/$Repository/releases/tag/v$AppVersion" -ForegroundColor Green
