@@ -140,7 +140,7 @@ function Invoke-Step {
     }
     catch {
         $stopwatch.Stop()
-        Write-Host "    FAILED ({0:n1}s): {1}" -f $stopwatch.Elapsed.TotalSeconds, $_.Exception.Message -ForegroundColor Red
+        Write-Host ("    FAILED ({0:n1}s): {1}" -f $stopwatch.Elapsed.TotalSeconds, $_.Exception.Message) -ForegroundColor Red
         throw
     }
 
@@ -598,7 +598,7 @@ function Send-ReleaseAsset {
         [Console]::OutputEncoding = $Utf8Encoding
         $output = $curlConfig | & curl.exe --silent --show-error --fail-with-body `
             --connect-timeout 30 --retry 3 --retry-delay 2 `
-            --request POST --config - "--data-binary=@$Path" $UploadUrl
+            --request POST --config - --data-binary "@$Path" $UploadUrl
         $exitCode = $LASTEXITCODE
     }
     finally {

@@ -108,7 +108,7 @@ function Invoke-Step {
     }
     catch {
         $stopwatch.Stop()
-        Write-Host "    FAILED ({0:n1}s): {1}" -f $stopwatch.Elapsed.TotalSeconds, $_.Exception.Message -ForegroundColor Red
+        Write-Host ("    FAILED ({0:n1}s): {1}" -f $stopwatch.Elapsed.TotalSeconds, $_.Exception.Message) -ForegroundColor Red
         throw
     }
 
