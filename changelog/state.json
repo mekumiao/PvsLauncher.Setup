@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "releases": {
+    "1.1.14": {
+      "releasedAt": "2026-11-06 17:15:30",
+      "tag": "v1.1.14",
+      "changelog": null,
+      "summary": null,
+      "repos": {
+        "PvsLauncher": "cfba615011e2455a5895d6c0dd200bc6e0fea492",
+        "ProductVisualStudio": "2801feeee7e188d05c79948b2084194357090f7c",
+        "product-visual-studio-vue": "f2b6fe3b39570d437a4667d68f8321072b95408a",
+        "PsdRender": "3c04a4e2560e6e50725a3327b8a1e95a6a91ce5d",
+        "SuCaiFlow": "c271e740889d7f5c0fbbb90bb1b43a753de8a495",
+        "Dependencies": "440732f59e058b50dbbfd33805f6e271d6e30565",
+        "PvsLauncher.Setup": "6bb63ec6c6aee86f19dce9187a112fff07a81341"
+      }
+    }
+  }
+}

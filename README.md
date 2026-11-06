@@ -7,8 +7,11 @@ PvsLauncher 一键构建与打包项目：把 **ProductVisualStudio.Web**、**si
 ```text
 PvsLauncher.Setup/
 ├─ build.ps1      # 构建、组装、打包脚本
+├─ publish.ps1    # 发布脚本：更新日志 → 构建 → 推送 → GitHub Release
 ├─ setup.iss      # Inno Setup 安装脚本
 ├─ version.txt    # 当前版本号（由 -Version 控制，见下文）
+├─ changelog/     # 每版本更新明细与基线（纳入 git）
+├─ CHANGELOG.md   # 更新日志索引
 ├─ assets/        # 预留的图标等资源目录
 └─ publish/       # 构建产物（已 gitignore）
    ├─ app/                          # 待安装的程序集
@@ -32,6 +35,8 @@ PvsLauncher.Setup/
 | `product-visual-studio-vue` | 前端，`pnpm build` 产出 `dist`                                                           |
 | `PvsLauncher`               | WinUI 启动器主体                                                                         |
 | `Dependencies`              | nginx / xray / frp 等运行时依赖来源                                                      |
+| `PsdRender`                 | 不参与构建，仅纳入更新日志                                                               |
+| `SuCaiFlow`                 | 不参与构建，仅纳入更新日志                                                               |
 
 ## 环境要求
 
@@ -155,6 +160,56 @@ pwsh ./build.ps1 -Version 2.0.0    # -> PvsLauncher-Setup-2.0.0.exe，version.tx
 - 安装包：`publish/PvsLauncher-Setup-<版本>.exe`
 
 安装包由 `setup.iss` 定义：产品名 `PvsLauncher`、**免管理员**（装到当前用户目录）、x64、中文界面、开始菜单快捷方式，桌面快捷方式为可选项（安装向导中的任务），安装完成后可选择立即启动。打包时排除所有 `*.pdb` 与 `launcher.state.yaml`；前置组件需用户预先安装（见「安装行为」）。
+
+## 发布版本
+
+`publish.ps1` 把「生成更新日志 → 构建 → 提交 → 推送 → GitHub Release」串成一条命令。它汇总同级目录下 7 个仓库（含本仓库）自上一版本以来的提交，写入 `changelog/`，并把安装包与 SHA256 校验文件上传到 [GitHub Release](https://github.com/mekumiao/PvsLauncher.Setup/releases)。
+
+```pwsh
+# 递增 patch 并完整发布
+pwsh ./publish.ps1 -Version +1
+
+# 用 version.txt 当前版本重新发布（构建后更新同名 Release）
+pwsh ./publish.ps1
+
+# 复用已有安装包，只更新日志与 Release
+pwsh ./publish.ps1 -SkipBuild
+
+# 只预览更新日志，不写文件、不构建、不推送
+pwsh ./publish.ps1 -Version +1 -DryRun
+
+# 本地生成日志并提交，不推送、不建 Release
+pwsh ./publish.ps1 -Version +1 -SkipBuild -NoPush
+```
+
+| 参数                                                                     | 说明                                                                 |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `-Version`                                                               | 与 `build.ps1` 相同的版本规则                                         |
+| `-SkipBuild`                                                             | 复用 `publish/PvsLauncher-Setup-<版本>.exe`                           |
+| `-SkipUpload`                                                            | 完成推送但不创建/更新 Release                                         |
+| `-NoPush`                                                                | 只在本地生成并提交                                                   |
+| `-DryRun`                                                                | 只打印更新日志与执行计划                                             |
+| `-Regenerate`                                                            | 强制重新采集已存在的版本日志                                         |
+| `-Force`                                                                 | 跳过安装包小于 20 MB 的体积保护                                      |
+| `-Repository` / `-GitHubRemote` / `-Branch`                              | 默认 `mekumiao/PvsLauncher.Setup` / `github` / 当前分支              |
+| `-SkipClean`、`-SkipVueInstall`、`-SkipVue`、`-SkipApi`、`-SkipAppLauncher` | 透传给 `build.ps1`                                                   |
+
+**环境变量**：`Github_PvsLauncherSetup_ApiKey`（该仓库内容的读写权限）。Token 只从环境变量读取，脚本不会写入文件，也不会打印到控制台。
+
+**流程**：
+
+1. 采集 7 个仓库自上一版本基线（`changelog/state.json`）以来的提交，生成 `changelog/v<版本>.md` 与 `CHANGELOG.md` 索引；
+2. 调用 `build.ps1` 构建安装包；
+3. 提交 `version.txt`、`CHANGELOG.md`、`changelog/`；
+4. 推送到 `github` 远端（不动 Gitee 的 `origin`）；
+5. 在该提交上创建或更新 `v<版本>` Release，上传 exe 与 `.sha256`。
+
+**注意**：
+
+- 首次基线为 `1.1.14`（只记录提交哈希，不生成日志），第一份自动日志从下一个版本开始。
+- 同版本重发会复用已有日志并覆盖同名资产；GitHub 上已存在的标签不会被移动。
+- 安装包正常约 150 MB，小于 20 MB 会拒绝发布（`-Force` 可跳过）。
+- 构建失败时不会写 `version.txt`；构建成功后若推送或 Release 失败，直接重跑同一版本即可续传。
 
 ## 单独使用 Inno Setup
 

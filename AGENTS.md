@@ -2,11 +2,14 @@
 
 ## What this repo is
 
-`PvsLauncher.Setup` 是 PvsLauncher 的**构建与打包仓库**，本身不含业务代码。唯一的入口脚本 `build.ps1` 会发布其它仓库、组装运行目录，再用 Inno Setup 打出安装包。
+`PvsLauncher.Setup` 是 PvsLauncher 的**构建与打包仓库**，本身不含业务代码。构建入口 `build.ps1` 发布其它仓库、组装运行目录，再用 Inno Setup 打出安装包；发布入口 `publish.ps1` 汇总各仓库变更、生成更新日志、提交推送并维护 GitHub Release。
 
 - `build.ps1` —— 构建 / 组装 / 打包全流程（PowerShell 7+）。
+- `publish.ps1` —— 发布流程：生成更新日志 → 构建 → 提交 → 推送 `github` → 创建/更新 Release（PowerShell 7+）。
 - `setup.iss` —— Inno Setup 安装脚本，`build.ps1` 通过 `/DMyAppVersion=<版本>` 注入版本。
 - `version.txt` —— 当前版本号，单行 `x.y.z`，**纳入 git**。
+- `changelog/` —— 每版本更新明细 `v<版本>.md` 与基线 `state.json`，**纳入 git**（格式见 `changelog/README.md`）。
+- `CHANGELOG.md` —— 由 `state.json` 渲染的索引表，**纳入 git**。
 - `assets/` —— 预留资源目录（当前为空）。
 - `publish/` —— 所有构建产物，**gitignored，绝不提交**。
 
@@ -18,6 +21,10 @@
 | `../product-visual-studio-vue` | 前端 `dist`                                                  |
 | `../PvsLauncher`               | WinUI 启动器                                                 |
 | `../Dependencies`              | nginx / xray / frp 运行时依赖来源                            |
+| `../PsdRender`                 | 仅纳入更新日志（不参与构建）                                 |
+| `../SuCaiFlow`                 | 仅纳入更新日志（不参与构建）                                 |
+
+`publish.ps1` 还会把本仓库自身（`PvsLauncher.Setup`）纳入更新日志。
 
 ## Commands
 
@@ -37,19 +44,34 @@ pwsh ./build.ps1 -Version 2.0.0
 # 只组装绿色目录，不打包
 pwsh ./build.ps1 -SkipInstaller
 
+# 发布新版本：生成日志 → 构建 → 提交 → 推送 github → 创建/更新 Release
+pwsh ./publish.ps1 -Version +1
+
+# 复用已有安装包，只生成日志并发布
+pwsh ./publish.ps1 -SkipBuild
+
+# 只预览更新日志，不写文件、不构建、不推送
+pwsh ./publish.ps1 -Version +1 -DryRun
+
+# 本地演练：写日志并提交，不推送、不建 Release
+pwsh ./publish.ps1 -Version +1 -SkipBuild -NoPush
+
 # 单独编译安装包（需 publish/app 已存在）
 & "C:\Program Files\Inno Setup 7\ISCC.exe" /DMyAppVersion=1.1.1 setup.iss
 ```
 
-无测试工程、无 CI。验证方式：`build.ps1` 跑通并产出 `publish/PvsLauncher-Setup-x.y.z.exe`。
+无测试工程、无 CI。验证方式：`build.ps1` 跑通并产出 `publish/PvsLauncher-Setup-x.y.z.exe`；发布流程可先用 `publish.ps1 -DryRun` 核对日志，再真实发布。
 
 ## Conventions
 
-- `build.ps1` 必须 **UTF-8 with BOM**（仓库约定；改动后用 `[System.IO.File]::WriteAllText($p,$c,(New-Object System.Text.UTF8Encoding($true)))` 复核）。
+- `build.ps1` 必须 **UTF-8 with BOM**（仓库约定；改动后用 `[System.IO.File]::WriteAllText($p,$c,(New-Object System.Text.UTF8Encoding($true)))` 复核）。`publish.ps1` 同样要求 BOM。
+- `CHANGELOG.md`、`changelog/*.md`、`changelog/state.json` 用 **UTF-8 无 BOM + LF**，由 `publish.ps1` 写入，不要手工改基线哈希。
 - 注释、`Write-Host` 提示、提交信息用中文；提交信息遵循 Conventional Commits。
 - 用 4 空格缩进；PowerShell 变量名用 `$PascalCase`（局部循环变量可小写）。
 - 路径统一用 `Join-Path` + `$PSScriptRoot` 推导，禁止依赖调用方的工作目录。
 - 每个构建步骤用 `Invoke-Step`（计时 + 失败即停）包裹，外部命令走 `Invoke-External`（检查 `$LASTEXITCODE`）。
+- **发布只推 `github` 远端**（`origin` 是 Gitee，脚本不动它）。Token 只从 `$env:Github_PvsLauncherSetup_ApiKey` 读取，禁止写入文件、命令行参数或日志。
+- 仓库章节顺序固定为：`PvsLauncher`、`ProductVisualStudio`、`product-visual-studio-vue`、`PsdRender`、`SuCaiFlow`、`Dependencies`、`PvsLauncher.Setup`。
 
 ## Gotchas
 
@@ -65,4 +87,10 @@ pwsh ./build.ps1 -SkipInstaller
 - **上游已知问题**（不在本仓库范围，勿在打包脚本里“修复”）：`PvsLauncher/.../launcher.yaml` 的 nginx 模板路径写作 `./Configs/conf/nginx.conf.template`，但实际文件是 `Configs/nginx.conf.template`（无 `conf/` 子目录），安装后首启可能找不到模板。发现时应指出，而不是默默改 `build.ps1`。
 - `publish/` 已被 `.gitignore` 忽略；`.gitignore` 只额外忽略 `*.exe`。
 - **历史安装包不清理**：`build.ps1` 的清理步骤只重置 `publish/app`，`publish/` 根目录下的 `PvsLauncher-Setup-*.exe` 按版本累积保留。不要重新加回 `Get-ChildItem -Filter '*.exe' | Remove-Item` 之类的逻辑。同版本重打包时 Inno 会覆盖同名安装包，属预期行为。
-- 构建产物较大（安装包约 160 MB），验证时避免重复全量打包；可用 `-SkipVue -SkipClean` 加速。
+- **更新日志基线**：`changelog/state.json` 记录每个版本各仓库的 HEAD。发布 `vX.Y.Z` 时取小于它的最高版本作基线，用 `git log <基线sha>..HEAD` 采集；`1.1.14` 是首次播种（只有哈希、没有日志），因此第一份自动日志是下一个版本。`chore(release): ...` 会被过滤，不计入下一版。基线提交在当前仓库不存在时回退到最新标签，再回退到首个提交，并打印警告。
+- **发布顺序与幂等**：构建成功后才写 `version.txt`。构建失败重跑时请给相同的 `-Version`；构建成功但推送或 Release 失败时，直接重跑（不带 `-Version +1`，或显式给同一版本）会复用已有日志、重新推送并 PATCH Release，不会丢提交区间。
+- **同版本重发**：已存在 `changelog/v<版本>.md` 时默认复用（`-Regenerate` 才重新采集）；Release 同名资产先删后传；GitHub 上已存在的 `v<版本>` 标签不会被移动，`target_commitish` 只在首次创建时生效。
+- **安装包体积保护**：小于 20 MB 直接失败（正常约 150 MB），确认无误可加 `-Force`。`publish/PvsLauncher-Setup-1.1.14.exe` 只有 1.2 MB，是失败产物，不要发布。
+- **GitHub 仓库与推送**：`github` 远端已存在，脚本不会创建；空仓库无法建 Release，脚本推送后会先用 API 校验提交存在。Release 只维护当前版本，历史 Release 不动。
+- **发布提交范围**：只提交 `version.txt`、`CHANGELOG.md`、`changelog/`，不会带上工作区其它改动（例如未完成的文档修改）。
+- 构建产物较大（安装包约 160 MB），验证时避免重复全量打包；可用 `-SkipVue -SkipClean` 加速，发布上传耗时取决于网络。
