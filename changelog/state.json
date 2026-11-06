@@ -38,6 +38,29 @@
         "Dependencies": "440732f59e058b50dbbfd33805f6e271d6e30565",
         "PvsLauncher.Setup": "53e665c9a1ba068b787f8772a95dcdc10a265bb4"
       }
+    },
+    "1.1.16": {
+      "releasedAt": "2026-11-06 19:59:02",
+      "tag": "v1.1.16",
+      "changelog": "changelog/v1.1.16.md",
+      "summary": {
+        "PvsLauncher": 4,
+        "ProductVisualStudio": 0,
+        "product-visual-studio-vue": 0,
+        "PsdRender": 0,
+        "SuCaiFlow": 0,
+        "Dependencies": 0,
+        "PvsLauncher.Setup": 3
+      },
+      "repos": {
+        "PvsLauncher": "2e51ae6e87e0ab6997618f70a0601783cf121c6a",
+        "ProductVisualStudio": "2801feeee7e188d05c79948b2084194357090f7c",
+        "product-visual-studio-vue": "f2b6fe3b39570d437a4667d68f8321072b95408a",
+        "PsdRender": "3c04a4e2560e6e50725a3327b8a1e95a6a91ce5d",
+        "SuCaiFlow": "c271e740889d7f5c0fbbb90bb1b43a753de8a495",
+        "Dependencies": "440732f59e058b50dbbfd33805f6e271d6e30565",
+        "PvsLauncher.Setup": "e0a317f35a81c8cd2c2e1e5cd0da43b2d81f22fc"
+      }
     }
   }
 }
