@@ -9,8 +9,8 @@
     2. 调用 build.ps1 构建安装包 publish/PvsLauncher-Setup-<版本>.exe；
     3. 生成 changelog/v<版本>.md 与 CHANGELOG.md，并记录本次基线；
     4. 提交 version.txt 与日志文件，推送到 github 远端；
-    5. 在推送后的提交上创建或更新 GitHub Release（先设为草稿），上传安装包与 SHA256 校验文件并校验大小，
-       全部成功后再正式发布（draft=false）。
+    5. 在推送后的提交上创建或更新 GitHub Release（先设为草稿），上传安装包并校验大小与 API 返回的
+       digest（sha256），全部成功后再正式发布（draft=false）。
 
     首次记录以 changelog/state.json 中 1.1.14 的基线为起点，1.1.14 及更早版本不生成日志。
     GitHub 推送只使用 github 远端；origin（Gitee）不会被动到。
@@ -794,9 +794,9 @@ if ($installerSize -lt 20MB -and -not $Force) {
     throw ("安装包体积异常（{0:n2} MB，正常约 150 MB），确认无误后可加 -Force 继续。" -f ($installerSize / 1MB))
 }
 
+# 不再生成/上传 .sha256 附件：GitHub 接收上传后会计算 digest（sha256:<hex>），客户端直接从 Release API 读取。
+# 本地仍算一次：写进 Release 正文，并用于校验远端 digest 与本地文件一致。
 $Sha256 = (Get-FileHash -LiteralPath $InstallerPath -Algorithm SHA256).Hash.ToLowerInvariant()
-$ShaFile = "$InstallerPath.sha256"
-Write-TextFile -Path $ShaFile -Content ($Sha256 + '  ' + (Split-Path -Leaf $InstallerPath) + "`n")
 
 # ----------------------------------------------------------------------------
 # 写入日志、基线与索引
@@ -965,29 +965,58 @@ if ($needUpload) {
             }
             $existingAssets = @($assetsResponse.Content | ConvertFrom-Json)
 
-            $assetFiles = @(
-                [pscustomobject]@{ Path = $InstallerPath; Name = (Split-Path -Leaf $InstallerPath) }
-                [pscustomobject]@{ Path = $ShaFile; Name = (Split-Path -Leaf $ShaFile) }
-            )
+            $assetName = Split-Path -Leaf $InstallerPath
 
-            foreach ($assetFile in $assetFiles) {
-                $existingAsset = $existingAssets | Where-Object { $_.name -eq $assetFile.Name } | Select-Object -First 1
-                if ($existingAsset) {
-                    $deleted = Invoke-GitHubRest -Method Delete -Uri "https://api.github.com/repos/$Repository/releases/assets/$($existingAsset.id)"
-                    if ($deleted.StatusCode -ne 204) {
-                        throw "删除旧资产 $($assetFile.Name) 失败（HTTP $($deleted.StatusCode)）：$($deleted.Content)"
-                    }
-                    Write-Host "    已删除旧资产 $($assetFile.Name)"
+            # 同版本重发时上一次可能还留着 .sha256 附件，显式清掉，保持 Release 只有安装包。
+            $staleChecksumName = "$assetName.sha256"
+            $staleChecksum = $existingAssets | Where-Object { $_.name -eq $staleChecksumName } | Select-Object -First 1
+            if ($staleChecksum) {
+                $deletedChecksum = Invoke-GitHubRest -Method Delete -Uri "https://api.github.com/repos/$Repository/releases/assets/$($staleChecksum.id)"
+                if ($deletedChecksum.StatusCode -ne 204) {
+                    throw "删除旧校验文件 $staleChecksumName 失败（HTTP $($deletedChecksum.StatusCode)）：$($deletedChecksum.Content)"
                 }
-
-                $uploadUrl = "https://uploads.github.com/repos/$Repository/releases/$($release.id)/assets?name=$([uri]::EscapeDataString($assetFile.Name))"
-                $uploaded = Send-ReleaseAsset -UploadUrl $uploadUrl -Path $assetFile.Path -Name $assetFile.Name
-                $localSize = (Get-Item -LiteralPath $assetFile.Path).Length
-                if ([long]$uploaded.size -ne [long]$localSize) {
-                    throw "资产 $($assetFile.Name) 大小不一致（远端 $($uploaded.size) / 本地 $localSize）"
-                }
-                Write-Host ("    已上传 {0} ({1:n1} MB)" -f $assetFile.Name, ($localSize / 1MB))
+                Write-Host "    已删除旧校验文件 $staleChecksumName"
             }
+
+            $existingAsset = $existingAssets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
+            if ($existingAsset) {
+                $deleted = Invoke-GitHubRest -Method Delete -Uri "https://api.github.com/repos/$Repository/releases/assets/$($existingAsset.id)"
+                if ($deleted.StatusCode -ne 204) {
+                    throw "删除旧资产 $assetName 失败（HTTP $($deleted.StatusCode)）：$($deleted.Content)"
+                }
+                Write-Host "    已删除旧资产 $assetName"
+            }
+
+            $uploadUrl = "https://uploads.github.com/repos/$Repository/releases/$($release.id)/assets?name=$([uri]::EscapeDataString($assetName))"
+            $uploaded = Send-ReleaseAsset -UploadUrl $uploadUrl -Path $InstallerPath -Name $assetName
+            $localSize = (Get-Item -LiteralPath $InstallerPath).Length
+            if ([long]$uploaded.size -ne [long]$localSize) {
+                throw "资产 $assetName 大小不一致（远端 $($uploaded.size) / 本地 $localSize）"
+            }
+
+            # GitHub 服务端对已上传内容计算 SHA256；大文件在 state=uploaded 后仍可能短暂为空，轮询补齐。
+            $remoteDigest = [string]$uploaded.digest
+            $assetId = $uploaded.id
+            for ($attempt = 1; $attempt -le 10 -and [string]::IsNullOrWhiteSpace($remoteDigest); $attempt++) {
+                Start-Sleep -Seconds 3
+                $assetResponse = Invoke-GitHubRest -Method Get -Uri "https://api.github.com/repos/$Repository/releases/assets/$assetId"
+                if ($assetResponse.StatusCode -eq 200) {
+                    $remoteDigest = [string](($assetResponse.Content | ConvertFrom-Json).digest)
+                }
+            }
+
+            $expectedDigest = "sha256:$Sha256"
+            if ([string]::IsNullOrWhiteSpace($remoteDigest)) {
+                Write-Host "    [提示] GitHub 暂未返回 $assetName 的 digest，跳过校验（本地 $expectedDigest）" -ForegroundColor Yellow
+            }
+            elseif (-not [string]::Equals($remoteDigest.Trim(), $expectedDigest, [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "资产 $assetName 的 digest 与本地不一致（远端 $remoteDigest / 本地 $expectedDigest）"
+            }
+            else {
+                Write-Host "    digest 校验通过 $expectedDigest"
+            }
+
+            Write-Host ("    已上传 {0} ({1:n1} MB)" -f $assetName, ($localSize / 1MB))
 
             if ($KeepDraft) {
                 if ($wasPublished) {
@@ -1036,7 +1065,7 @@ if ($needUpload) {
 Write-Section '完成'
 Write-Host "版本: $AppVersion"
 Write-Host "安装包: $InstallerPath"
-Write-Host "校验文件: $ShaFile"
+Write-Host "SHA256: $Sha256"
 if ($NoPush) {
     Write-Host '已按 -NoPush 跳过推送与 Release。'
 }

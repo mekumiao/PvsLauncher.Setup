@@ -163,7 +163,7 @@ pwsh ./build.ps1 -Version 2.0.0    # -> PvsLauncher-Setup-2.0.0.exe，version.tx
 
 ## 发布版本
 
-`publish.ps1` 把「生成更新日志 → 构建 → 提交 → 推送 → GitHub Release」串成一条命令。它汇总同级目录下 7 个仓库（含本仓库）自上一版本以来的提交，写入 `changelog/`，并把安装包与 SHA256 校验文件上传到 [GitHub Release](https://github.com/mekumiao/PvsLauncher.Setup/releases)。
+`publish.ps1` 把「生成更新日志 → 构建 → 提交 → 推送 → GitHub Release」串成一条命令。它汇总同级目录下 7 个仓库（含本仓库）自上一版本以来的提交，写入 `changelog/`，并把安装包上传到 [GitHub Release](https://github.com/mekumiao/PvsLauncher.Setup/releases)。SHA256 不再单独上传校验文件，由 GitHub 在接收上传后计算并通过 Release API 的 `digest` 字段（`sha256:<hex>`）提供，脚本上传后会用它与本地计算结果比对。
 
 ```pwsh
 # 递增 patch 并完整发布
@@ -202,7 +202,7 @@ pwsh ./publish.ps1 -Version +1 -SkipBuild -NoPush
 2. 调用 `build.ps1` 构建安装包；
 3. 提交 `version.txt`、`CHANGELOG.md`、`changelog/`；
 4. 推送到 `github` 远端（不动 Gitee 的 `origin`）；
-5. 在该提交上创建或更新 `v<版本>` Release，上传 exe 与 `.sha256`。
+5. 在该提交上创建或更新 `v<版本>` Release，上传 exe，并用 API 返回的 `digest` 校验其 SHA256。
 
 **注意**：
 
