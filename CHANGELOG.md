@@ -4,6 +4,7 @@
 
 | 版本 | 发布日期 | 变更摘要 |
 | --- | --- | --- |
+| [v1.1.25](changelog/v1.1.25.md) | 2026-11-10 | PvsLauncher 1 · PvsLauncher.Setup 1 |
 | [v1.1.24](changelog/v1.1.24.md) | 2026-11-10 | PvsLauncher 4 |
 | [v1.1.23](changelog/v1.1.23.md) | 2026-11-10 | PvsLauncher 2 |
 | [v1.1.22](changelog/v1.1.22.md) | 2026-11-10 | PvsLauncher 1 |
