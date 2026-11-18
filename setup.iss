@@ -52,14 +52,16 @@ Source: "publish\app\*"; DestDir: "{app}"; Excludes: "*.pdb,launcher.state.yaml"
 Source: "assets\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\app.ico"
-Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+; 开始菜单目录（{group} 即 DefaultGroupName，默认 PvsLauncher）下固定两项：启动 + 卸载，图标统一复用随包安装的 app.ico。
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\app.ico"; Comment: "启动 {#MyAppName}"
+Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"; IconFilename: "{app}\app.ico"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\app.ico"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
 
 ; 卸载时仅删除整个安装目录（含 Dependencies / Configs 等运行期残留）；
-; 用户运行态数据（%LOCALAPPDATA%\PvsLauncher）一律保留。
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
+; 兜底：清除安装时创建的开始菜单目录（仅当已空；用户自己放入的内容不会被删，目录不存在也不报错）。
+Type: dirifempty; Name: "{group}"
